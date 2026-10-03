@@ -157,6 +157,12 @@ export const autoUpdateAPI = {
   getStatus: () => apiClient.get('/api/autoUpdate/status'),
   testNotify: (channel, config) => apiClient.post('/api/autoUpdate/testNotify', { channel, config: config || {} }),
   updateGroup: (containerId) => apiClient.post(`/api/container/${containerId}/updateGroup`),
+  // 镜像快照（旧镜像回滚）
+  getSnapshots: () => apiClient.get('/api/snapshot/list'),
+  createSnapshot: (payload) => apiClient.post('/api/snapshot/create', payload || {}),
+  rollbackSnapshot: (containerName, ref) => apiClient.post('/api/snapshot/rollback', { containerName, ref }),
+  pruneSnapshots: (keep) => apiClient.post('/api/snapshot/prune', keep ? { keep } : {}),
+  deleteSnapshots: (refs) => apiClient.delete(`/api/snapshot?refs=${encodeURIComponent((refs || []).join(','))}`),
 }
 
 // GitHub API - 用于检查前端更新

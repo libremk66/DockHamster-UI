@@ -123,16 +123,25 @@ export function AutoUpdate() {
   const [busy, setBusy] = useState(false)
   const [testing, setTesting] = useState(false)
   const [loadErr, setLoadErr] = useState(false)
+  const [snapStats, setSnapStats] = useState(null)
 
-  // 首次加载：设置 + 状态 + 容器列表
+  const loadSnapStats = useCallback(async () => {
+    try {
+      const r = await autoUpdateAPI.getSnapshots()
+      if (r.data.code === 200 || r.data.code === 0) setSnapStats(r.data.data)
+    } catch (e) { /* 忽略 */ }
+  }, [])
+
+  // 首次加载：设置 + 状态 + 容器列表 + 快照统计
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const [s, st, c] = await Promise.all([
+        const [s, st, c, snap] = await Promise.all([
           autoUpdateAPI.getSettings(),
           autoUpdateAPI.getStatus(),
           containerAPI.getContainers(),
+          autoUpdateAPI.getSnapshots(),
         ])
         if (!mounted) return
         // 注意：官方老接口成功码是 0，新接口是 200，两者都要认
@@ -143,6 +152,7 @@ export function AutoUpdate() {
         }
         if (okCode(st)) setStatus(st.data.data)
         if (okCode(c)) setContainers(c.data.data || [])
+        if (okCode(snap)) setSnapStats(snap.data.data)
       } catch (e) {
         console.error('加载自动更新数据失败:', e)
         if (mounted) setLoadErr(true)
@@ -185,6 +195,31 @@ export function AutoUpdate() {
     const list = settings.containers || []
     const next = list.includes(name) ? list.filter(n => n !== name) : [...list, name]
     patch('containers', next)
+  }
+
+  const setContainerPolicy = (name, policy) => {
+    if (!settings) return
+    const cp = { ...(settings.containerPolicy || {}) }
+    if (policy === 'inherit') delete cp[name]
+    else cp[name] = policy
+    patch('containerPolicy', cp)
+  }
+
+  const globalPolicy = settings?.oldImagePolicy || 'clean'
+
+  const pruneSnapshots = async () => {
+    setMsg(null)
+    try {
+      const r = await autoUpdateAPI.pruneSnapshots()
+      if (r.data.code === 200) {
+        setMsg({ type: 'ok', text: r.data.msg || '已清理' })
+        loadSnapStats()
+      } else {
+        setMsg({ type: 'err', text: r.data.msg || '清理失败' })
+      }
+    } catch (e) {
+      setMsg({ type: 'err', text: e.response?.data?.msg || e.message || '清理失败' })
+    }
   }
 
   const save = async () => {
@@ -330,16 +365,72 @@ export function AutoUpdate() {
             <p className="text-xs text-gray-400 dark:text-gray-500">
               分 时 日 月 周 ｜ 示例：<code>0 4 * * *</code>＝每天 04:00；<code>30 3 * * 6</code>＝每周六 03:30
             </p>
-            <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={settings.deleteOldImage}
-                onChange={(e) => patch('deleteOldImage', e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <Trash2 className="h-4 w-4 text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300">更新完成后自动清理旧镜像（安全条件保护）</span>
-            </label>
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-700/60 space-y-2">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">更新完成后的旧镜像处理</span>
+                <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  {[
+                    { v: 'clean', label: '🧹 自动清理' },
+                    { v: 'snapshot', label: '🏷 打快照保留' },
+                  ].map(opt => (
+                    <button
+                      key={opt.v}
+                      onClick={() => patch('oldImagePolicy', opt.v)}
+                      className={cn(
+                        'px-3 py-1.5 text-xs transition-colors',
+                        globalPolicy === opt.v
+                          ? 'bg-primary-600 text-white font-semibold'
+                          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {globalPolicy === 'snapshot' ? (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/60 px-3 py-2.5 space-y-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-xs text-amber-800 dark:text-amber-300">
+                    <span>每镜像保留最近</span>
+                    <input
+                      type="number" min={1} max={50}
+                      value={settings.snapshotKeep || 3}
+                      onChange={(e) => patch('snapshotKeep', Math.max(1, Math.min(50, parseInt(e.target.value || '3', 10) || 3)))}
+                      className="w-14 px-2 py-1 rounded border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 text-amber-900 dark:text-amber-200"
+                    />
+                    <span>个 · 命名</span>
+                    <input
+                      type="text"
+                      value={settings.snapshotTemplate || '{name}:{date}-{time}'}
+                      onChange={(e) => patch('snapshotTemplate', e.target.value)}
+                      className="w-48 px-2 py-1 rounded border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 font-mono text-amber-900 dark:text-amber-200"
+                      title="可用变量：{name} {date} {time} {id}"
+                    />
+                    <span className="text-amber-600 dark:text-amber-400/80">前缀 {settings.snapshotPrefix || 'dh-snap'}/</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
+                    <span>
+                      当前已有 <b>{snapStats?.count ?? 0}</b> 个快照 · 占用 <b>{snapStats?.sizeLabel || '0B'}</b>
+                      {snapStats?.diskFreeLbl ? `（系统盘剩余 ${snapStats.diskFreeLbl}）` : ''}
+                    </span>
+                    <button
+                      onClick={pruneSnapshots}
+                      className="ml-auto px-2 py-1 rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                    >
+                      清理旧快照
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  满足安全条件（无容器引用、无标签、非新镜像）才删除，省空间
+                </p>
+              )}
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                每行白名单容器可单独覆盖策略（默认继承上面的全局设置）
+              </p>
+            </div>
           </div>
         </Card>
 
@@ -410,27 +501,48 @@ export function AutoUpdate() {
             {containers.map(c => {
               const checked = (settings.containers || []).includes(c.name)
               return (
-                <label
+                <div
                   key={c.id}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors",
+                    "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
                     checked
                       ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50/60 dark:bg-emerald-900/10"
                       : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40"
                   )}
                 >
-                  <input type="checkbox" checked={checked} onChange={() => toggleContainer(c.name)} className="h-4 w-4 rounded" />
-                  <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", c.status === 'running' ? 'bg-emerald-500' : 'bg-gray-400')} />
-                  <span className="text-sm text-gray-800 dark:text-gray-200 truncate flex-1">{c.name}</span>
-                  {lastStatus[c.name] && (
-                    <span
-                      title={`上次：${lastStatus[c.name].time} ${lastStatus[c.name].message || ''}`}
-                      className={lastStatus[c.name].ok ? 'text-emerald-500' : 'text-red-500'}
-                    >
-                      {lastStatus[c.name].ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                    </span>
-                  )}
-                </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none flex-1 min-w-0">
+                    <input type="checkbox" checked={checked} onChange={() => toggleContainer(c.name)} className="h-4 w-4 rounded flex-shrink-0" />
+                    <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", c.status === 'running' ? 'bg-emerald-500' : 'bg-gray-400')} />
+                    <span className="text-sm text-gray-800 dark:text-gray-200 truncate">{c.name}</span>
+                    {lastStatus[c.name] && (
+                      <span
+                        title={`上次：${lastStatus[c.name].time} ${lastStatus[c.name].message || ''}`}
+                        className={lastStatus[c.name].ok ? 'text-emerald-500' : 'text-red-500'}
+                      >
+                        {lastStatus[c.name].ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={(settings.containerPolicy || {})[c.name] || 'inherit'}
+                    onChange={(e) => setContainerPolicy(c.name, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    title="此容器的旧镜像处置策略"
+                    className={cn(
+                      "ml-auto text-[11px] rounded-md border px-1.5 py-1 bg-white dark:bg-gray-800 outline-none flex-shrink-0",
+                      (settings.containerPolicy || {})[c.name] === 'snapshot'
+                        ? "border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
+                        : (settings.containerPolicy || {})[c.name] === 'clean'
+                          ? "border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300"
+                          : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400"
+                    )}
+                  >
+                    <option value="inherit">继承全局</option>
+                    <option value="clean">🧹 清理</option>
+                    <option value="snapshot">🏷 打快照</option>
+                    <option value="keep">保留不处理</option>
+                  </select>
+                </div>
               )
             })}
             {containers.length === 0 && (
@@ -588,12 +700,16 @@ export function AutoUpdate() {
                     {(r.updated || []).length > 0 && <span className="text-emerald-600 dark:text-emerald-400">✅ {r.updated.length}</span>}
                     {(r.failed || []).length > 0 && <span className="text-red-600 dark:text-red-400">⚠️ {r.failed.length}</span>}
                     {r.cleanedImages > 0 && <span className="text-gray-500 dark:text-gray-400">🗑️ {r.cleanedImages}</span>}
+                    {(r.snapshots || []).length > 0 && <span className="text-amber-600 dark:text-amber-400">🏷️ {r.snapshots.length}</span>}
                     <span className="text-gray-400 dark:text-gray-500">⏱ {r.durationSec}s</span>
                   </span>
                 </div>
-                {((r.updated || []).length > 0 || (r.failed || []).length > 0 || r.note) && (
+                {((r.updated || []).length > 0 || (r.failed || []).length > 0 || r.note || (r.snapshots || []).length > 0) && (
                   <div className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
                     {(r.updated || []).length > 0 && <div>已更新：{r.updated.join('、')}</div>}
+                    {(r.snapshots || []).length > 0 && (
+                      <div className="text-amber-600 dark:text-amber-400">🏷️ 已打快照：{r.snapshots.join('、')}</div>
+                    )}
                     {(r.failed || []).map((f, j) => (
                       <div key={j} className="text-red-500 dark:text-red-400">失败：{f.name}（{f.error}）</div>
                     ))}

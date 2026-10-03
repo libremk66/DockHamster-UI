@@ -11,7 +11,8 @@ import {
   Package,
   X,
   Info,
-  Search
+  Search,
+  History
 } from 'lucide-react'
 import { containerAPI, progressAPI, imageAPI, autoUpdateAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
@@ -109,6 +110,8 @@ export function Containers() {
   const [autoSettings, setAutoSettings] = useState(null)
   const [autoStatus, setAutoStatus] = useState(null)
   const [groupModal, setGroupModal] = useState({ isOpen: false, container: null, siblings: [] })
+  const [snapshots, setSnapshots] = useState([])
+  const [rollbackModal, setRollbackModal] = useState({ isOpen: false, container: null, candidates: [], selected: '' })
 
 
 
@@ -172,10 +175,15 @@ export function Containers() {
     let mounted = true
     const loadAuto = async () => {
       try {
-        const [s, st] = await Promise.all([autoUpdateAPI.getSettings(), autoUpdateAPI.getStatus()])
+        const [s, st, snap] = await Promise.all([
+          autoUpdateAPI.getSettings(),
+          autoUpdateAPI.getStatus(),
+          autoUpdateAPI.getSnapshots(),
+        ])
         if (!mounted) return
         if (s.data.code === 200) setAutoSettings(s.data.data)
         if (st.data.code === 200) setAutoStatus(st.data.data)
+        if ((snap.data.code === 200 || snap.data.code === 0) && snap.data.data) setSnapshots(snap.data.data.snapshots || [])
       } catch (e) {
         // 老后端 / 接口不可用时忽略
       }
@@ -459,6 +467,74 @@ export function Containers() {
   }
 
   // 整组更新：后端统一拉取一次，逐个更新共用该镜像的所有容器
+  // 该容器可回滚的快照：快照名匹配"镜像短名"或"容器名"，且不是当前正在跑的镜像
+  const snapshotsFor = (container) => {
+    if (!container || !snapshots.length) return []
+    const imageRef = container.usingImage || ''
+    const repoNoTag = imageRef.includes('/') && imageRef.lastIndexOf(':') > imageRef.lastIndexOf('/')
+      ? imageRef.slice(0, imageRef.lastIndexOf(':'))
+      : imageRef
+    const shortName = repoNoTag.includes('/') ? repoNoTag.slice(repoNoTag.lastIndexOf('/') + 1) : repoNoTag
+    const candidates = [shortName, container.name].filter(Boolean).map(v => v.toLowerCase())
+    return snapshots.filter(sn =>
+      candidates.includes((sn.baseName || '').toLowerCase()) && sn.imageId !== container.imageId
+    )
+  }
+
+  const openRollback = (container, e) => {
+    e?.stopPropagation()
+    const candidates = snapshotsFor(container)
+    setRollbackModal({
+      isOpen: true,
+      container,
+      candidates,
+      selected: candidates[0]?.ref || '',
+    })
+  }
+
+  const doRollback = async () => {
+    const { container, selected } = rollbackModal
+    if (!container || !selected) return
+    setRollbackModal({ isOpen: false, container: null, candidates: [], selected: '' })
+    setContainerActions(prev => ({ ...prev, [container.id]: { loading: true, action: 'rollback' } }))
+    try {
+      const r = await autoUpdateAPI.rollbackSnapshot(container.name, selected)
+      if (r.data.code === 200 && r.data.data?.taskID) {
+        await pollProgress(container.id, r.data.data.taskID)
+      } else {
+        setContainerActions(prev => {
+          const next = { ...prev }
+          delete next[container.id]
+          return next
+        })
+        setConfirmModal({
+          isOpen: true, title: '回滚失败', message: r.data.msg || '回滚请求失败',
+          onConfirm: () => setConfirmModal(m => ({ ...m, isOpen: false })),
+          onCancel: () => setConfirmModal(m => ({ ...m, isOpen: false })), type: 'danger',
+        })
+      }
+    } catch (e) {
+      setContainerActions(prev => {
+        const next = { ...prev }
+        delete next[container.id]
+        return next
+      })
+      setConfirmModal({
+        isOpen: true, title: '回滚失败', message: e.response?.data?.msg || e.message || '回滚失败',
+        onConfirm: () => setConfirmModal(m => ({ ...m, isOpen: false })),
+        onCancel: () => setConfirmModal(m => ({ ...m, isOpen: false })), type: 'danger',
+      })
+    } finally {
+      // 回滚后刷新快照与容器列表
+      setTimeout(() => {
+        autoUpdateAPI.getSnapshots().then(snap => {
+          if (snap.data?.data) setSnapshots(snap.data.data.snapshots || [])
+        }).catch(() => {})
+        refetch()
+      }, 1500)
+    }
+  }
+
   const handleGroupUpdate = async () => {
     const target = groupModal.container
     setGroupModal({ isOpen: false, container: null, siblings: [] })
@@ -896,6 +972,73 @@ export function Containers() {
       )}
 
       {/* 共用镜像整组更新弹窗（方案 A） */}
+      {rollbackModal.isOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+              <History className="h-4 w-4 text-amber-500" />
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white flex-1">
+                回滚 {rollbackModal.container?.name} 到历史版本
+              </h3>
+              <button
+                onClick={() => setRollbackModal({ isOpen: false, container: null, candidates: [], selected: '' })}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-2 max-h-80 overflow-y-auto">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                将用选中的快照镜像重建容器；<b className="text-amber-600 dark:text-amber-400">回滚前会自动给当前版本也打一份快照</b>，随时可以再回滚回来。
+              </p>
+              {rollbackModal.candidates.map(sn => (
+                <label
+                  key={sn.ref}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors",
+                    rollbackModal.selected === sn.ref
+                      ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20"
+                      : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="rollback-snapshot"
+                    checked={rollbackModal.selected === sn.ref}
+                    onChange={() => setRollbackModal(m => ({ ...m, selected: sn.ref }))}
+                    className="h-4 w-4"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white font-mono truncate">{sn.ref}</div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500">
+                      {sn.timeLabel || '—'}{sn.inUse ? ' · 使用中' : ''}
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
+                    {(sn.size / 1024 / 1024).toFixed(0)} MB
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700 flex gap-3">
+              <button
+                onClick={() => setRollbackModal({ isOpen: false, container: null, candidates: [], selected: '' })}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={doRollback}
+                disabled={!rollbackModal.selected}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors disabled:opacity-50"
+              >
+                确认回滚
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {groupModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
@@ -1360,7 +1503,7 @@ export function Containers() {
                         {act?.loading ? (
                           <span className="text-xs text-primary-600 dark:text-primary-400 flex items-center gap-1.5 px-2 py-1.5">
                             <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                            {act.action === 'update' ? '更新中' : act.action === 'start' ? '启动中' : act.action === 'stop' ? '停止中' : '重启中'}
+                            {act.action === 'update' ? '更新中' : act.action === 'rollback' ? '回滚中' : act.action === 'start' ? '启动中' : act.action === 'stop' ? '停止中' : '重启中'}
                           </span>
                         ) : (
                           <>
@@ -1390,6 +1533,19 @@ export function Containers() {
                                 <Play className="h-3.5 w-3.5" />启动
                               </button>
                             )}
+                            {(() => {
+                              const cands = snapshotsFor(container)
+                              if (cands.length === 0) return null
+                              return (
+                                <button
+                                  onClick={(e) => openRollback(container, e)}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                                  title={`回滚到快照（${cands.length} 个可选）`}
+                                >
+                                  <History className="h-3.5 w-3.5" />回滚
+                                </button>
+                              )
+                            })()}
                             <button
                               onClick={(e) => { e.stopPropagation(); handleUpdateContainer(container.id) }}
                               className={cn(

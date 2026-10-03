@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search } from 'lucide-react'
-import { imageAPI } from '../api/client.js'
+import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search, History, ShieldCheck } from 'lucide-react'
+import { imageAPI, autoUpdateAPI, containerAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 import { getImageLogo } from '../config/imageLogos.js'
 
@@ -33,6 +33,10 @@ export function Images() {
   const [searchQuery, setSearchQuery] = useState('')
   const [pruneModal, setPruneModal] = useState({ isOpen: false, type: null, images: [] })
   const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' })
+  // 快照（旧镜像回滚）
+  const [snapshots, setSnapshots] = useState([])
+  const [containers, setContainers] = useState([])
+  const [rollbackTarget, setRollbackTarget] = useState(null) // {containerName, ref, candidates}
 
   // 获取自定义图标配置
   const { data: customIcons = {} } = useQuery({
@@ -88,9 +92,63 @@ export function Images() {
     }
   }
 
+  const fetchSnapshots = async () => {
+    try {
+      const [snap, c] = await Promise.all([autoUpdateAPI.getSnapshots(), containerAPI.getContainers()])
+      if (snap.data?.data) setSnapshots(snap.data.data.snapshots || [])
+      if (c.data && (c.data.code === 200 || c.data.code === 0)) setContainers(c.data.data || [])
+    } catch (e) { /* 老后端忽略 */ }
+  }
+
   useEffect(() => {
     fetchImages()
+    fetchSnapshots()
   }, [])
+
+  // 快照对应的候选容器（按快照名匹配容器名或镜像短名）
+  const containersForSnapshot = (sn) => {
+    const base = (sn.baseName || '').toLowerCase()
+    if (!base) return []
+    return containers.filter(c => {
+      const imageRef = c.usingImage || ''
+      const repoNoTag = imageRef.lastIndexOf(':') > imageRef.lastIndexOf('/') ? imageRef.slice(0, imageRef.lastIndexOf(':')) : imageRef
+      const shortName = repoNoTag.includes('/') ? repoNoTag.slice(repoNoTag.lastIndexOf('/') + 1) : repoNoTag
+      return c.name?.toLowerCase() === base || shortName?.toLowerCase() === base
+    })
+  }
+
+  const deleteSnapshot = async (ref) => {
+    try {
+      const r = await autoUpdateAPI.deleteSnapshots([ref])
+      if (r.data?.code === 200) {
+        const failed = r.data.data?.failed || {}
+        if (failed[ref]) {
+          setError(`删除失败：${failed[ref]}`)
+        } else {
+          setSuccessModal({ isOpen: true, message: '快照已删除' })
+        }
+        fetchSnapshots()
+      } else {
+        setError(r.data?.msg || '删除失败')
+      }
+    } catch (e) {
+      setError(e.response?.data?.msg || e.message || '删除失败')
+    }
+  }
+
+  const pruneSnapshots = async () => {
+    try {
+      const r = await autoUpdateAPI.pruneSnapshots()
+      if (r.data?.code === 200) {
+        setSuccessModal({ isOpen: true, message: r.data.msg || '已清理' })
+        fetchSnapshots()
+      } else {
+        setError(r.data?.msg || '清理失败')
+      }
+    } catch (e) {
+      setError(e.response?.data?.msg || e.message || '清理失败')
+    }
+  }
 
   const handleDeleteImage = async (imageId, force = false) => {
     try {
@@ -320,7 +378,7 @@ export function Images() {
 
       {/* 统计信息 */}
       <div className="px-2 sm:px-6 py-4">
-        <div className="grid grid-cols-4 gap-0 rounded-3xl overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="grid grid-cols-5 gap-0 rounded-3xl overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           {/* 总镜像数 */}
           <button
             onClick={() => setFilterStatus(null)}
@@ -372,6 +430,23 @@ export function Images() {
             </div>
           </button>
 
+          {/* 快照 */}
+          <button
+            onClick={() => setFilterStatus('snapshot')}
+            className={cn(
+              "p-3 sm:p-5 text-center transition-all duration-300 relative overflow-hidden group border-r border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center",
+              filterStatus === 'snapshot' ? "bg-amber-50 dark:bg-amber-900/20" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+            )}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="relative">
+              <div className="text-2xl sm:text-3xl font-bold text-amber-600 dark:text-amber-400 transition-transform duration-300 group-hover:scale-110">
+                {snapshots.length}
+              </div>
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">快照</div>
+            </div>
+          </button>
+
           {/* 无Tag */}
           <button
             onClick={() => setFilterStatus('dangling')}
@@ -400,6 +475,7 @@ export function Images() {
                 筛选中：
                 {filterStatus === 'used' && '使用中的镜像'}
                 {filterStatus === 'unused' && '未使用的镜像'}
+                {filterStatus === 'snapshot' && '镜像快照（更新前旧版本，可回滚）'}
                 {filterStatus === 'dangling' && '无Tag的镜像'}
               </span>
               <button
@@ -418,10 +494,21 @@ export function Images() {
         {images.length > 0 && (
           <div className="mb-3 flex items-center justify-between gap-3">
             <span className="text-xs text-gray-400 dark:text-gray-500">
-              {visibleImages.length === images.length
-                ? `共 ${images.length} 个镜像`
-                : `筛选出 ${visibleImages.length} / ${images.length} 个镜像`}
+              {filterStatus === 'snapshot'
+                ? `共 ${snapshots.length} 个快照`
+                : visibleImages.length === images.length
+                  ? `共 ${images.length} 个镜像`
+                  : `筛选出 ${visibleImages.length} / ${images.length} 个镜像`}
             </span>
+            {filterStatus === 'snapshot' && snapshots.length > 0 && (
+              <button
+                onClick={pruneSnapshots}
+                className="px-2.5 py-1.5 rounded-lg border text-xs font-medium text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors ml-2"
+                title="按保留数量清理过期快照"
+              >
+                清理过期快照
+              </button>
+            )}
             <div className="relative w-56 max-w-[60%]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
               <input
@@ -443,7 +530,78 @@ export function Images() {
             </div>
           </div>
         )}
-        {images.length === 0 ? (
+        {filterStatus === 'snapshot' ? (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_110px_150px_170px_220px] gap-3 px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10">
+              <span>快照</span>
+              <span>大小</span>
+              <span>状态</span>
+              <span>时间</span>
+              <span className="text-right">操作</span>
+            </div>
+            {snapshots.length === 0 && (
+              <div className="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+                还没有快照。开启「更新完成后打快照保留」后，更新前的旧镜像会自动留下快照。
+              </div>
+            )}
+            {snapshots.map(sn => {
+              const cands = containersForSnapshot(sn)
+              return (
+                <div
+                  key={sn.ref}
+                  className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_150px_170px_220px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-amber-50/40 dark:hover:bg-amber-900/10 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                      <History className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white font-mono truncate">{sn.ref}</div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">
+                        sha256:{sn.shortId}{sn.usedBy?.length ? ` · 被 ${sn.usedBy.join('、')} 使用` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 lg:contents">
+                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {(sn.size / 1024 / 1024).toFixed(0)} MB
+                    </div>
+                    <div>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap inline-flex items-center gap-1">
+                        <ShieldCheck className="h-3 w-3" />受保护
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                      {sn.timeLabel || '—'}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 justify-end items-center">
+                    {cands.length > 0 && (
+                      <button
+                        onClick={() => setRollbackTarget({ containerName: cands[0].name, ref: sn.ref, candidates: cands })}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                        title={`回滚容器 ${cands.map(c => c.name).join('、')} 到此快照`}
+                      >
+                        <History className="h-3.5 w-3.5" />回滚
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setDeleteModal({ isOpen: true, image: { id: sn.ref, name: sn.ref, force: true }, snapshotRef: sn.ref })}
+                      disabled={sn.inUse}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={sn.inUse ? '仍被容器使用，无法删除' : '删除此快照'}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />删除
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+            <div className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 bg-amber-50/40 dark:bg-amber-900/5">
+              快照是本地标签（独立命名空间），不参与「更新检测」，也不会被「自动清理旧镜像」删除；点击「回滚」可把容器恢复到该版本。
+            </div>
+          </div>
+        ) : images.length === 0 ? (
           <div className="card p-12 text-center rounded-2xl">
             <HardDrive className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">暂无镜像</h3>
@@ -629,6 +787,64 @@ export function Images() {
         </div>
       )}
 
+      {/* 回滚确认弹窗 */}
+      {rollbackTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+              <History className="h-4 w-4 text-amber-500" />
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white flex-1">回滚容器到快照</h3>
+              <button onClick={() => setRollbackTarget(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-600 dark:text-gray-300 leading-relaxed space-y-2">
+              <p>
+                将把容器 <b className="text-gray-900 dark:text-white">{rollbackTarget.containerName}</b> 恢复为快照版本：
+              </p>
+              <p className="font-mono text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 rounded-lg px-3 py-2 break-all">
+                {rollbackTarget.ref}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                回滚前会自动给当前版本也打一份快照，随时可以再回滚回来；回滚过程会短暂重启该容器。
+              </p>
+              {rollbackTarget.candidates.length > 1 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  该快照匹配多个容器（{rollbackTarget.candidates.map(c => c.name).join('、')}），将回滚第一个：{rollbackTarget.candidates[0].name}
+                </p>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700 flex gap-3">
+              <button
+                onClick={() => setRollbackTarget(null)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  const t = rollbackTarget
+                  setRollbackTarget(null)
+                  try {
+                    const r = await autoUpdateAPI.rollbackSnapshot(t.containerName, t.ref)
+                    if (r.data?.code === 200) {
+                      setSuccessModal({ isOpen: true, message: `已开始回滚 ${t.containerName}，可在容器页查看进度` })
+                    } else {
+                      setError(r.data?.msg || '回滚失败')
+                    }
+                  } catch (e) {
+                    setError(e.response?.data?.msg || e.message || '回滚失败')
+                  }
+                }}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors"
+              >
+                确认回滚
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 删除确认弹窗 */}
       {deleteModal.isOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
@@ -644,7 +860,7 @@ export function Images() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                    {deleteModal.force ? '强制删除镜像' : '删除镜像'}
+                    {deleteModal.snapshotRef ? '删除快照' : deleteModal.force ? '强制删除镜像' : '删除镜像'}
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">此操作不可恢复</p>
                 </div>
@@ -655,7 +871,13 @@ export function Images() {
 
               {/* 消息内容 */}
               <div className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mb-8">
-                {deleteModal.force ? (
+                {deleteModal.snapshotRef ? (
+                  <>
+                    确定要删除快照{' '}
+                    <span className="font-semibold text-red-600 dark:text-red-400 font-mono">"{deleteModal.snapshotRef}"</span>
+                    {' '}吗？删除后将无法回滚到该版本。
+                  </>
+                ) : deleteModal.force ? (
                   <>
                     确定要强制删除镜像{' '}
                     <span className="font-semibold text-red-600 dark:text-red-400">"{deleteModal.image?.name}"</span>
@@ -679,7 +901,14 @@ export function Images() {
                   取消
                 </button>
                 <button
-                  onClick={() => deleteModal.image && handleDeleteImage(deleteModal.image.id, deleteModal.force)}
+                  onClick={() => {
+                    if (deleteModal.snapshotRef) {
+                      deleteSnapshot(deleteModal.snapshotRef)
+                      setDeleteModal({ isOpen: false, image: null })
+                    } else if (deleteModal.image) {
+                      handleDeleteImage(deleteModal.image.id, deleteModal.force)
+                    }
+                  }}
                   disabled={isLoading}
                   className="flex-1 px-4 py-2.5 text-sm font-semibold bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white rounded-xl transition-all duration-300 transform hover:shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                 >
