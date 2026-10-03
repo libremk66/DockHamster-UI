@@ -508,7 +508,7 @@ export function Migrate() {
                 </div>
                 {(plan.items || []).map(it => {
                   const imgMeta = { local: '本地已有 ✅', package: '包内提供 ✅', registry: '可拉取 ☁️', missing: '缺失 ❌' }[it.imageSource]
-                  const hasWarn = it.nameConflict || (it.portConflicts || []).length || (it.missingMounts || []).length
+                  const hasWarn = it.nameConflict || (it.portConflicts || []).length || (it.missingMounts || []).length || (it.unverifiable || []).length
                   return (
                     <div key={it.name} className={cn(
                       'flex flex-col lg:grid lg:grid-cols-[150px_minmax(0,1fr)_110px_minmax(0,1.2fr)_90px] gap-x-3 gap-y-1.5 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0',
@@ -538,6 +538,12 @@ export function Migrate() {
                           </div>
                         )}
                         {(it.portConflicts || []).map((pc, i) => <div key={i} className="text-amber-600 dark:text-amber-400">端口 {pc}</div>)}
+                        {(it.unverifiable || []).map((m, i) => (
+                          <div key={`uv${i}`} className="truncate text-gray-400 dark:text-gray-500" title="面板容器未挂载该路径，无法确认；导入时按原路径使用">
+                            <span>待确认</span><span className="font-mono"> {m.source}</span>
+                            <span className="ml-1 text-gray-400">（面板不可见，可能只是看不到）</span>
+                          </div>
+                        ))}
                         {(it.missingMounts || []).map((m, i) => (
                           <div key={i} className="truncate">
                             <span className="text-amber-600 dark:text-amber-400">路径不存在</span>
