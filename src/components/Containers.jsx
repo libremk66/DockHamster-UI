@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { containerAPI, progressAPI, imageAPI, autoUpdateAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
+import { CheckUpdateButton } from './CheckUpdateButton.jsx'
 import { cn } from '../utils/cn.js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getImageLogo } from '../config/imageLogos.js'
@@ -111,7 +112,6 @@ export function Containers() {
   const [autoStatus, setAutoStatus] = useState(null)
   const [groupModal, setGroupModal] = useState({ isOpen: false, container: null, siblings: [] })
   const [snapshots, setSnapshots] = useState([])
-  const [checkingUpdates, setCheckingUpdates] = useState(false)
   const [rollbackModal, setRollbackModal] = useState({ isOpen: false, container: null, candidates: [], selected: '' })
 
 
@@ -236,36 +236,18 @@ export function Containers() {
     return list.includes('*') || list.includes(name)
   }
 
-  // 「检查更新」按钮：立即探测一轮，完成后刷新列表并弹结果
-  const checkUpdatesNow = async () => {
-    setCheckingUpdates(true)
-    try {
-      const r = await autoUpdateAPI.checkNow()
-      if (r.data.code === 200) {
-        const d = r.data.data || {}
-        setConfirmModal({
-          isOpen: true,
-          title: '检查更新完成',
-          message: r.data.msg || `已检查 ${d.checked || 0} 个镜像`,
-          onConfirm: () => setConfirmModal({ isOpen: false }),
-          onCancel: () => setConfirmModal({ isOpen: false }),
-          type: d.needUpdate > 0 ? 'warning' : 'info',
-        })
-        refetch()
-      } else {
-        setConfirmModal({
-          isOpen: true, title: '检查更新失败', message: r.data?.msg || '未知错误',
-          onConfirm: () => setConfirmModal({ isOpen: false }), onCancel: null, type: 'danger',
-        })
-      }
-    } catch (e) {
+  // 「检查更新」完成后的回调（组件内部负责轮询，这里只管刷新与展示结果）
+  const onCheckDone = (st) => {
+    refetch()
+    if (st && !st.running) {
       setConfirmModal({
-        isOpen: true, title: '检查更新失败',
-        message: e.response?.data?.msg || e.message || '未知错误',
-        onConfirm: () => setConfirmModal({ isOpen: false }), onCancel: null, type: 'danger',
+        isOpen: true,
+        title: '检查更新完成',
+        message: `已检查 ${st.checked || 0} 个镜像，发现 ${st.needUpdate || 0} 个有新版本`,
+        onConfirm: () => setConfirmModal({ isOpen: false }),
+        onCancel: () => setConfirmModal({ isOpen: false }),
+        type: (st.needUpdate || 0) > 0 ? 'warning' : 'info',
       })
-    } finally {
-      setCheckingUpdates(false)
     }
   }
 
@@ -1298,24 +1280,14 @@ export function Containers() {
       {/* 容器列表 */}
       <div className="px-2 sm:px-6 py-4">
         {containers.length > 0 && (
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={checkUpdatesNow}
-                disabled={checkingUpdates}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 disabled:opacity-50"
-                title="立即去 registry 检查一遍有没有新版本"
-              >
-                <RefreshCw className={cn('h-3.5 w-3.5', checkingUpdates && 'animate-spin')} />
-                {checkingUpdates ? '检查中…' : '检查更新'}
-              </button>
-              <span className="text-xs text-gray-400 dark:text-gray-500">
+          <div className="mb-3 flex items-center gap-3 flex-wrap">
+            <CheckUpdateButton onDone={onCheckDone} manageCron />
+            <span className="text-xs text-gray-400 dark:text-gray-500">
                 {visibleContainers.length === containers.length
                   ? `共 ${containers.length} 个容器`
                   : `筛选出 ${visibleContainers.length} / ${containers.length} 个容器`}
-              </span>
-            </div>
-            <div className="relative w-56 max-w-[60%]">
+            </span>
+            <div className="relative w-56 max-w-[60%] ml-auto">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"

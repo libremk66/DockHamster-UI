@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search, History, ShieldCheck } from 'lucide-react'
 import { imageAPI, autoUpdateAPI, containerAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
+import { CheckUpdateButton } from './CheckUpdateButton.jsx'
 import { getImageLogo } from '../config/imageLogos.js'
 
 // 安全的图片组件
@@ -137,22 +138,10 @@ export function Images() {
     }
   }
 
-  // 「检查更新」：立即探测一轮
-  const checkUpdatesNow = async () => {
-    setCheckingUpdates(true)
-    try {
-      const r = await autoUpdateAPI.checkNow()
-      if (r.data?.code === 200) {
-        const d = r.data.data || {}
-        setSuccessModal({ isOpen: true, message: r.data.msg || `已检查 ${d.checked || 0} 个镜像` })
-        fetchImages()
-      } else {
-        setError(r.data?.msg || '检查失败')
-      }
-    } catch (e) {
-      setError(e.response?.data?.msg || e.message || '检查失败')
-    } finally {
-      setCheckingUpdates(false)
+  const onCheckDone = (st) => {
+    fetchImages()
+    if (st && !st.running) {
+      setSuccessModal({ isOpen: true, message: `已检查 ${st.checked || 0} 个镜像，发现 ${st.needUpdate || 0} 个有新版本` })
     }
   }
 
@@ -520,15 +509,7 @@ export function Images() {
                   ? `共 ${images.length} 个镜像`
                   : `筛选出 ${visibleImages.length} / ${images.length} 个镜像`}
             </span>
-            <button
-              onClick={checkUpdatesNow}
-              disabled={checkingUpdates}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 disabled:opacity-50"
-              title="立即去 registry 检查一遍有没有新版本"
-            >
-              <RefreshCw className={cn('h-3.5 w-3.5', checkingUpdates && 'animate-spin')} />
-              {checkingUpdates ? '检查中…' : '检查更新'}
-            </button>
+            <CheckUpdateButton onDone={onCheckDone} />
             {filterStatus === 'snapshot' && snapshots.length > 0 && (
               <button
                 onClick={pruneSnapshots}

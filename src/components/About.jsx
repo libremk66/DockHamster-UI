@@ -27,7 +27,7 @@ export function About() {
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">DockHamster <span className="text-base font-medium text-gray-400 dark:text-gray-500">容器仓鼠</span></h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              基于 onlyLTY/dockerCopilot 的社区增强版（AGPL-3.0）· Docker 容器管理工具
+              基于 onlyLTY/dockerCopilot 的增强版（AGPL-3.0）· Docker 容器更新管理工具
             </p>
           </div>
         </div>
