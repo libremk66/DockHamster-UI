@@ -256,7 +256,7 @@ export function AutoUpdate() {
           <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-700 dark:text-amber-300">
             <p className="font-medium">后端未提供「自动更新」接口</p>
-            <p className="mt-1 text-amber-600 dark:text-amber-400">该功能需要定制版后端（libremk66/dockercopilot-custom）。</p>
+            <p className="mt-1 text-amber-600 dark:text-amber-400">该功能需要 DockHamster 后端。</p>
           </div>
         </div>
       </div>
@@ -403,7 +403,7 @@ export function AutoUpdate() {
               onChange={(e) => patch('containers', e.target.checked ? ['*'] : [])}
               className="h-4 w-4 rounded"
             />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">全部容器（*，DockCopilot 自身除外）</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">全部容器（*，DockHamster 自身除外）</span>
           </label>
 
           <div className={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2", isAll && "opacity-50 pointer-events-none")}>

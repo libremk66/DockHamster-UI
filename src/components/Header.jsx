@@ -10,7 +10,7 @@ import {
 import { ThemeToggle } from './ThemeToggle.jsx'
 import { UpdatePrompt } from './UpdatePrompt.jsx'
 import { cn } from '../utils/cn.js'
-import logoImg from '../assets/DockerCopilot-logo.png'
+import logoImg from '../assets/dockhamster-logo.png'
 import { useVersionCheck } from '../hooks/useVersionCheck.js'
 
 export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false, onToggleCollapse, windowWidth = 1024 }) {
@@ -110,7 +110,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
               className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg object-cover border-0"
             />
             <div className="flex items-center gap-1">
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">Docker Copilot</span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">DockHamster</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">{backendVersion || 'v1.0'}</span>
             </div>
           </button>
@@ -176,13 +176,13 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                 <div className="flex-shrink-0">
                   <img
                     src={logoImg}
-                    alt="Docker Copilot"
+                    alt="DockHamster"
                     className="h-9 w-9 sm:h-11 sm:w-11 rounded-xl object-cover shadow-md group-hover:shadow-lg group-hover:scale-110 transition-all duration-200 border-0"
                   />
                 </div>
                 {!isCollapsed && isMobileSize === false && (
                   <div className="text-left transition-all duration-300 min-w-0 flex-1">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Docker Copilot</h1>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">DockHamster</h1>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">容器管理平台</p>
                   </div>
                 )}
@@ -305,18 +305,6 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">
                       {backendVersion || '1.0'}
                     </span>
-                  </div>
-                </div>
-
-                {/* 团队信息 - 紧凑两列 */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-2.5 py-2">
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500">前端</span>
-                    <p className="text-xs font-medium text-gray-800 dark:text-gray-200 mt-0.5">DongShu</p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-2.5 py-2">
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500">后端</span>
-                    <p className="text-xs font-medium text-gray-800 dark:text-gray-200 mt-0.5">onlyLTY</p>
                   </div>
                 </div>
 

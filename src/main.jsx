@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
-import logoImg from './assets/DockerCopilot-logo.png'
+import logoImg from './assets/dockhamster-logo.png'
 
 // 设置浏览器 favicon
 const setFavicon = () => {

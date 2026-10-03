@@ -1,4 +1,4 @@
-const CACHE_NAME = 'docker-copilot-v1';
+const CACHE_NAME = 'dockhamster-v1';
 const urlsToCache = [
   '/',
   '/index.html',

@@ -6,6 +6,7 @@
 import MediaSaberLogo from '../assets/logos/media-saber.png';
 import MoviepilotLogo from '../assets/logos/moviepilot.png';
 import DockerCopilotLogo from '../assets/logos/docker-copilot.png';
+import DockHamsterLogo from '../assets/dockhamster-logo.png';
 import MTPhotos from '../assets/logos/mt-photos.png';
 import ITToolsLogo from '../assets/logos/it-tools.webp';
 import SubStoreLogo from '../assets/logos/sub-store.webp';
@@ -39,6 +40,7 @@ export const builtInImageLogos = {
   "xylplm/bm-simulate-xunlei-api-to-media-saber": MediaSaberLogo,
   "jxxghp/moviepilot-v2": MoviepilotLogo,
   "0nlylty/dockercopilot": DockerCopilotLogo,
+  "libremk66/dockhamster": DockHamsterLogo,
   "mtphotos/mt-photos": MTPhotos,
   "kqstone/mt-photos-insightface-unofficial": MTPhotos,
   "mtphotos/mt-photos-ai": MTPhotos,

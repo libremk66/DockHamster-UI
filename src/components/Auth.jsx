@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Key, LogIn, Eye, EyeOff } from 'lucide-react'
 import { authAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
-import logoImg from '../assets/DockerCopilot-logo.png'
+import logoImg from '../assets/dockhamster-logo.png'
 
 export function Auth({ onLogin }) {
   const [secretKey, setSecretKey] = useState('')
@@ -46,11 +46,11 @@ export function Auth({ onLogin }) {
           <div className="flex justify-center mb-4">
             <img 
               src={logoImg}
-              alt="Docker Copilot"
+              alt="DockHamster"
               className="h-32 w-32 rounded-2xl object-cover"
             />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Docker Copilot</h2>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">DockHamster</h2>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             请输入密钥进行认证
           </p>

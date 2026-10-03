@@ -1,11 +1,11 @@
 {
-  "name": "Docker Copilot",
-  "short_name": "Docker",
-  "description": "一个简洁、优雅且强大的 Docker 容器管理工具",
+  "name": "DockHamster · 容器仓鼠",
+  "short_name": "DockHamster",
+  "description": "DockHamster 容器仓鼠 —— 简洁、优雅且强大的 Docker 容器管理工具",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "theme_color": "#0ea5e9",
+  "theme_color": "#2563EB",
   "background_color": "#ffffff",
   "orientation": "portrait-primary",
   "icons": [
@@ -28,5 +28,8 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["utilities", "productivity"]
+  "categories": [
+    "utilities",
+    "productivity"
+  ]
 }

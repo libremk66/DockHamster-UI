@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- E. 顶箱鼠脸（正面 · 参考排布 5/3/1，箱:隙 = 3:1） -->
+  <rect width="128" height="128" rx="28" fill="#2563EB"/>
+  <g fill="#BFDBFE">
+    <rect x="26" y="44" width="12" height="12" rx="2.5"/>
+    <rect x="42" y="44" width="12" height="12" rx="2.5"/>
+    <rect x="58" y="44" width="12" height="12" rx="2.5"/>
+    <rect x="74" y="44" width="12" height="12" rx="2.5"/>
+    <rect x="90" y="44" width="12" height="12" rx="2.5"/>
+    <rect x="42" y="28" width="12" height="12" rx="2.5"/>
+    <rect x="58" y="28" width="12" height="12" rx="2.5"/>
+    <rect x="74" y="28" width="12" height="12" rx="2.5"/>
+    <rect x="74" y="12" width="12" height="12" rx="2.5"/>
+  </g>
+  <circle cx="36" cy="66" r="9.5" fill="#FFFFFF"/>
+  <circle cx="36" cy="66" r="4.5" fill="#BFDBFE"/>
+  <circle cx="92" cy="66" r="9.5" fill="#FFFFFF"/>
+  <circle cx="92" cy="66" r="4.5" fill="#BFDBFE"/>
+  <rect x="22" y="58" width="84" height="60" rx="28" fill="#FFFFFF"/>
+  <ellipse cx="44" cy="101" rx="11" ry="7.5" fill="#DBEAFE"/>
+  <ellipse cx="84" cy="101" rx="11" ry="7.5" fill="#DBEAFE"/>
+  <circle cx="48" cy="85" r="4.2" fill="#1E3A8A"/>
+  <circle cx="80" cy="85" r="4.2" fill="#1E3A8A"/>
+  <circle cx="64" cy="96" r="3.6" fill="#1E3A8A"/>
+</svg>
