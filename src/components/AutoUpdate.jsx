@@ -52,6 +52,67 @@ function Card({ title, icon: Icon, children, className }) {
 
 const TRIGGER_LABEL = { auto: '定时', manual: '手动', group: '整组' }
 
+const NOTIFY_INPUT_CLS = "w-full px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+
+// 通知渠道定义（与后端 module/notify.go 对应）
+const NOTIFY_GROUPS = [
+  {
+    label: '群机器人', channels: [
+      {
+        type: 'feishu', name: '飞书', fields: [
+          { key: 'webhook', label: 'Webhook 地址', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...' },
+          { key: 'secret', label: '签名密钥（可选，机器人开了签名校验才需要）', placeholder: '' },
+        ]
+      },
+      {
+        type: 'wecom', name: '企业微信', fields: [
+          { key: 'webhook', label: 'Webhook 地址', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...' },
+        ]
+      },
+      {
+        type: 'dingtalk', name: '钉钉', fields: [
+          { key: 'webhook', label: 'Webhook 地址', placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...' },
+          { key: 'secret', label: '加签密钥（可选）', placeholder: '' },
+        ]
+      },
+    ]
+  },
+  {
+    label: '手机推送', channels: [
+      {
+        type: 'bark', name: 'Bark', fields: [
+          { key: 'server', label: '服务器（默认 https://api.day.app）', placeholder: 'https://api.day.app' },
+          { key: 'key', label: 'Key', placeholder: '你的 Bark Key' },
+        ]
+      },
+      {
+        type: 'serverchan', name: 'Server酱', fields: [
+          { key: 'sendKey', label: 'SendKey', placeholder: 'SCT...' },
+        ]
+      },
+      {
+        type: 'telegram', name: 'Telegram', fields: [
+          { key: 'token', label: 'Bot Token', placeholder: '123456:ABC...' },
+          { key: 'chatId', label: 'Chat ID', placeholder: '123456789' },
+          { key: 'apiBase', label: 'API 地址（可选，直连不通可填反代）', placeholder: 'https://api.telegram.org' },
+        ]
+      },
+    ]
+  },
+  {
+    label: '通用', channels: [
+      {
+        type: 'webhook', name: '自定义 Webhook', fields: [
+          { key: 'url', label: 'URL', placeholder: 'https://...' },
+          { key: 'method', label: '方法', type: 'select' },
+          { key: 'headers', label: '请求头 JSON（可选）', placeholder: '{"Authorization": "Bearer xxx"}', textarea: true },
+          { key: 'bodyTemplate', label: 'Body 模板（可选，支持 {title} {text}）', placeholder: '{"msg": "{title}"}', textarea: true },
+        ]
+      },
+    ]
+  },
+]
+
 export function AutoUpdate() {
   const [settings, setSettings] = useState(null)
   const [status, setStatus] = useState(null)
@@ -148,17 +209,27 @@ export function AutoUpdate() {
     }
   }
 
-  const testNotify = async () => {
+  // 更新某个渠道的配置（表单态，保存后生效）
+  const updateChannel = (type, patchObj) => {
     if (!settings) return
-    setTesting(true); setMsg(null)
+    const notify = settings.notify || {}
+    const cur = notify[type] || {}
+    patch('notify', { ...notify, [type]: { ...cur, ...patchObj } })
+  }
+
+  // 测试某个渠道（直接用当前表单值发一条，不用先保存）
+  const testChannel = async (type) => {
+    if (!settings) return
+    setTesting(type); setMsg(null)
     try {
-      const r = await autoUpdateAPI.testNotify(settings.feishuWebhook)
-      if (r.data.code === 200) setMsg({ type: 'ok', text: r.data.msg || '已发送' })
+      const ch = (settings.notify || {})[type] || {}
+      const r = await autoUpdateAPI.testNotify(type, ch)
+      if (r.data.code === 200 || r.data.code === 0) setMsg({ type: 'ok', text: r.data.msg || '已发送' })
       else setMsg({ type: 'err', text: r.data.msg || '发送失败' })
     } catch (e) {
       setMsg({ type: 'err', text: e.response?.data?.msg || e.message || '发送失败' })
     } finally {
-      setTesting(false)
+      setTesting(null)
     }
   }
 
@@ -188,7 +259,7 @@ export function AutoUpdate() {
   const runs = status?.runs || []
 
   return (
-    <div className="p-2 pt-4 sm:p-0 sm:pt-0 space-y-4 max-w-5xl">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-4">
       {/* 页头 */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
@@ -338,29 +409,9 @@ export function AutoUpdate() {
         </div>
       </Card>
 
-      {/* 通知 */}
-      <Card title="通知（飞书）" icon={Bell}>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1.5">飞书机器人 Webhook</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={settings.feishuWebhook}
-                onChange={(e) => patch('feishuWebhook', e.target.value)}
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white font-mono focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-                placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
-              />
-              <button
-                onClick={testNotify}
-                disabled={testing}
-                className={cn("btn-secondary flex items-center gap-1.5 whitespace-nowrap", testing && "opacity-60 cursor-not-allowed")}
-              >
-                <Send className="h-4 w-4" /> {testing ? '发送中...' : '测试发送'}
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">飞书群 → 设置 → 群机器人 → 添加「自定义机器人」→ 复制 Webhook 地址</p>
-          </div>
+      {/* 通知（多渠道） */}
+      <Card title="通知（多渠道）" icon={Bell}>
+        <div className="space-y-4">
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
@@ -380,7 +431,90 @@ export function AutoUpdate() {
               />
               <span className="text-sm text-gray-700 dark:text-gray-300">出现失败时发送告警</span>
             </label>
+            <span className="text-xs text-gray-400 dark:text-gray-500 self-center">渠道勾选后按上面的规则发送；改完点右上角「保存设置」生效</span>
           </div>
+
+          {NOTIFY_GROUPS.map(group => (
+            <div key={group.label}>
+              <p className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-2">{group.label}</p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {group.channels.map(chDef => {
+                  const ch = (settings.notify || {})[chDef.type] || {}
+                  return (
+                    <div
+                      key={chDef.type}
+                      className={cn(
+                        "rounded-lg border px-3 py-2.5 transition-colors",
+                        ch.enabled
+                          ? "border-primary-300 dark:border-primary-700 bg-primary-50/40 dark:bg-primary-900/10"
+                          : "border-gray-200 dark:border-gray-700"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={!!ch.enabled}
+                            onChange={(e) => updateChannel(chDef.type, { enabled: e.target.checked })}
+                            className="h-4 w-4 rounded"
+                          />
+                          <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{chDef.name}</span>
+                        </label>
+                        {ch.enabled && (
+                          <button
+                            onClick={() => testChannel(chDef.type)}
+                            disabled={testing === chDef.type}
+                            className={cn(
+                              "text-xs px-2 py-1 rounded-md border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 flex items-center gap-1",
+                              testing === chDef.type && "opacity-60 cursor-not-allowed"
+                            )}
+                          >
+                            <Send className="h-3 w-3" />
+                            {testing === chDef.type ? '发送中' : '测试'}
+                          </button>
+                        )}
+                      </div>
+                      {ch.enabled && (
+                        <div className="mt-2 space-y-2">
+                          {chDef.fields.map(f => (
+                            <div key={f.key}>
+                              <label className="block text-[11px] text-gray-400 dark:text-gray-500 mb-0.5">{f.label}</label>
+                              {f.type === 'select' ? (
+                                <select
+                                  value={ch[f.key] || ''}
+                                  onChange={(e) => updateChannel(chDef.type, { [f.key]: e.target.value })}
+                                  className={cn(NOTIFY_INPUT_CLS, "text-xs")}
+                                >
+                                  <option value="">POST（默认）</option>
+                                  <option value="GET">GET</option>
+                                </select>
+                              ) : f.textarea ? (
+                                <textarea
+                                  rows={2}
+                                  value={ch[f.key] || ''}
+                                  onChange={(e) => updateChannel(chDef.type, { [f.key]: e.target.value })}
+                                  placeholder={f.placeholder || ''}
+                                  className={cn(NOTIFY_INPUT_CLS, "text-xs font-mono resize-y")}
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={ch[f.key] || ''}
+                                  onChange={(e) => updateChannel(chDef.type, { [f.key]: e.target.value })}
+                                  placeholder={f.placeholder || ''}
+                                  className={cn(NOTIFY_INPUT_CLS, "text-xs font-mono")}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </Card>
 

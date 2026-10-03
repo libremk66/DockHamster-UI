@@ -155,7 +155,7 @@ export const autoUpdateAPI = {
   saveSettings: (settings) => apiClient.post('/api/autoUpdate/settings', settings),
   run: () => apiClient.post('/api/autoUpdate/run'),
   getStatus: () => apiClient.get('/api/autoUpdate/status'),
-  testNotify: (webhook) => apiClient.post('/api/autoUpdate/testNotify', { webhook: webhook || '' }),
+  testNotify: (channel, config) => apiClient.post('/api/autoUpdate/testNotify', { channel, config: config || {} }),
   updateGroup: (containerId) => apiClient.post(`/api/container/${containerId}/updateGroup`),
 }
 
