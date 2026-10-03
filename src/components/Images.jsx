@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle } from 'lucide-react'
+import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search } from 'lucide-react'
 import { imageAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 import { getImageLogo } from '../config/imageLogos.js'
@@ -30,6 +30,7 @@ export function Images() {
   const [success, setSuccess] = useState(null)
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, image: null })
   const [filterStatus, setFilterStatus] = useState(null) // null 表示显示全部
+  const [searchQuery, setSearchQuery] = useState('')
   const [pruneModal, setPruneModal] = useState({ isOpen: false, type: null, images: [] })
   const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' })
 
@@ -160,6 +161,32 @@ export function Images() {
     if (sizeInMB < 300) return 'text-yellow-600 dark:text-yellow-400'
     return 'text-red-600 dark:text-red-400'
   }
+
+  // 悬空（无 tag）镜像判断
+  const isDanglingImage = (image) => {
+    const noName = !image.name || image.name === 'None' || image.name === '<none>'
+    const noTag = !image.tag || image.tag === 'None' || image.tag === '<none>'
+    return noName || noTag
+  }
+
+  const formatImageRef = (image) => (isDanglingImage(image) ? '<none>:<none>' : `${image.name}:${image.tag}`)
+
+  const shortImageId = (id) => (id || '').replace(/^sha256:/, '').slice(0, 12)
+
+  // 列表筛选：状态 + 关键字（镜像名 / tag / ID）
+  const matchImage = (image) => {
+    if (filterStatus === 'used' && !image.inUsed) return false
+    if (filterStatus === 'unused' && image.inUsed) return false
+    if (filterStatus === 'dangling' && !isDanglingImage(image)) return false
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      const haystack = `${image.name || ''} ${image.tag || ''} ${image.id || ''}`.toLowerCase()
+      if (!haystack.includes(q)) return false
+    }
+    return true
+  }
+
+  const visibleImages = images.filter(matchImage)
 
   if (isLoading && images.length === 0) {
     return (
@@ -386,8 +413,36 @@ export function Images() {
         </div>
       )}
 
-      {/* 镜像网格 */}
+      {/* 镜像列表 */}
       <div className="px-2 sm:px-6 py-4">
+        {images.length > 0 && (
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {visibleImages.length === images.length
+                ? `共 ${images.length} 个镜像`
+                : `筛选出 ${visibleImages.length} / ${images.length} 个镜像`}
+            </span>
+            <div className="relative w-56 max-w-[60%]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索镜像…"
+                className="w-full pl-8 pr-8 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title="清空搜索"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {images.length === 0 ? (
           <div className="card p-12 text-center rounded-2xl">
             <HardDrive className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
@@ -395,19 +450,29 @@ export function Images() {
             <p className="text-gray-500 dark:text-gray-400">您还没有任何Docker镜像</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {images
-              .filter((image) => {
-                if (!filterStatus) return true
-                if (filterStatus === 'used') return image.inUsed
-                if (filterStatus === 'unused') return !image.inUsed
-                if (filterStatus === 'dangling') return image.tag === 'None' || image.tag === '<none>'
-                return true
-              })
-              .map((image) => (
-                <div key={image.id} className="group card p-4 rounded-2xl hover:shadow-lg transition-all">
-                  {/* 头部：图标、名字、状态指示器和大小 */}
-                  <div className="flex items-start gap-3 mb-4">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+            {/* 表头（桌面端） */}
+            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_110px_130px_170px_220px] gap-3 px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700/60 bg-gray-50/70 dark:bg-gray-900/20">
+              <span>镜像</span>
+              <span>大小</span>
+              <span>使用情况</span>
+              <span>创建时间</span>
+              <span className="text-right">操作</span>
+            </div>
+            {visibleImages.length === 0 && (
+              <div className="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+                没有匹配的镜像（试试调整筛选条件或搜索关键字）
+              </div>
+            )}
+            {visibleImages.map((image) => {
+              const dangling = isDanglingImage(image)
+              return (
+                <div
+                  key={image.id}
+                  className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_130px_170px_220px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors"
+                >
+                  {/* ① 镜像 */}
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className="h-10 w-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                       <SafeImage
                         src={getImageLogo(image.name, customIcons)}
@@ -416,75 +481,68 @@ export function Images() {
                         fallback={<HardDrive className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
                       />
                     </div>
-                    
-                    {/* 竖线状态指示器 */}
-                    <div className="flex flex-col items-center justify-center h-10">
-                      {image.inUsed && (
-                        <div className="w-1 h-6 bg-gradient-to-b from-green-500 to-green-600 rounded-full flex-shrink-0" />
-                      )}
-                      {!image.inUsed && (
-                        <div className="w-1 h-6 bg-gray-300 dark:bg-gray-600 rounded-full flex-shrink-0" />
-                      )}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-gray-900 dark:text-white truncate text-sm">
-                        {image.name}
-                      </h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center justify-between gap-2">
-                        <span className="truncate">{image.tag}</span>
-                        <span className={cn("font-semibold flex-shrink-0 whitespace-nowrap", getSizeColor(image.size))}>
-                          大小: {formatImageSize(image.size)}
-                        </span>
-                      </p>
-                    </div>
-
-                    {/* 官网跳转按钮 - 始终显示 */}
-                    <div className="flex gap-1">
-                      <a
-                        href={`https://hub.docker.com/r/${image.name}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 rounded transition-colors active:scale-95"
-                        title="在Docker Hub查看"
-                      >
-                        <Link className="h-4 w-4" />
-                      </a>
+                    <div className="min-w-0 flex-1">
+                      <div className={cn(
+                        "text-sm font-semibold truncate",
+                        dangling ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"
+                      )}>
+                        {formatImageRef(image)}
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">
+                        sha256:{shortImageId(image.id)}{dangling ? ' · 无标签（悬空）' : ''}
+                      </div>
                     </div>
                   </div>
 
-                  {/* 镜像信息 */}
-                  <div className="space-y-2 text-xs mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">ID:</span>
-                      <span className="font-mono text-gray-700 dark:text-gray-300 truncate text-xs">
-                        {image.id}
-                      </span>
+                  {/* 移动端横排；桌面端展开为三列 */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 lg:contents">
+                    {/* ② 大小 */}
+                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {formatImageSize(image.size)}
+                    </div>
+                    {/* ③ 使用情况 */}
+                    <div>
+                      {image.inUsed
+                        ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-medium whitespace-nowrap">使用中</span>
+                        : <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 font-medium whitespace-nowrap">未使用</span>}
+                    </div>
+                    {/* ④ 创建时间 */}
+                    <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                      {image.createTime || '—'}
                     </div>
                   </div>
 
-                  {/* 操作按钮 */}
-                  <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-700">
+                  {/* ⑤ 操作 */}
+                  <div className="flex gap-1.5 justify-end items-center">
+                    <a
+                      href={`https://hub.docker.com/r/${image.name}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-primary-200 dark:hover:border-primary-800 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                      title="在Docker Hub查看"
+                    >
+                      <Link className="h-3.5 w-3.5" />Hub
+                    </a>
                     <button
                       onClick={() => setDeleteModal({ isOpen: true, image, force: false })}
-                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors active:scale-95"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="删除"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>删除</span>
+                      <Trash2 className="h-3.5 w-3.5" />删除
                     </button>
                     {image.inUsed && (
                       <button
                         onClick={() => setDeleteModal({ isOpen: true, image, force: true })}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors active:scale-95"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-orange-600 dark:text-orange-400 border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                         title="强制删除正在使用的镜像"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span>强制删除</span>
+                        <Trash2 className="h-3.5 w-3.5" />强删
                       </button>
                     )}
                   </div>
                 </div>
-              ))}
+              )
+            })}
           </div>
         )}
       </div>
