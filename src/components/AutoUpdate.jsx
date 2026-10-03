@@ -73,12 +73,14 @@ export function AutoUpdate() {
           containerAPI.getContainers(),
         ])
         if (!mounted) return
-        if (s.data.code === 200) {
+        // 注意：官方老接口成功码是 0，新接口是 200，两者都要认
+        const okCode = (r) => r.data.code === 200 || r.data.code === 0
+        if (okCode(s)) {
           setSettings(s.data.data)
           setExcludeText((s.data.data.exclude || []).join(', '))
         }
-        if (st.data.code === 200) setStatus(st.data.data)
-        if (c.data.code === 200) setContainers(c.data.data || [])
+        if (okCode(st)) setStatus(st.data.data)
+        if (okCode(c)) setContainers(c.data.data || [])
       } catch (e) {
         console.error('加载自动更新数据失败:', e)
         if (mounted) setLoadErr(true)
@@ -92,7 +94,7 @@ export function AutoUpdate() {
     const timer = setInterval(async () => {
       try {
         const st = await autoUpdateAPI.getStatus()
-        if (st.data.code === 200) setStatus(st.data.data)
+        if (st.data.code === 200 || st.data.code === 0) setStatus(st.data.data)
       } catch (e) { /* 忽略瞬时失败 */ }
     }, 10000)
     return () => clearInterval(timer)
