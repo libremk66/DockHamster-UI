@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { autoUpdateAPI, containerAPI } from '../api/client.js'
+import { ProgressBar } from './ProgressBar.jsx'
 import { cn } from '../utils/cn.js'
 
 // 简易开关组件
@@ -150,15 +151,24 @@ export function AutoUpdate() {
     return () => { mounted = false }
   }, [])
 
-  // 状态定时刷新（运行进度/记录）
+  // 状态刷新：运行中 2 秒一次（实时进度），空闲 10 秒一次
   useEffect(() => {
-    const timer = setInterval(async () => {
+    let mounted = true
+    let timer = null
+    const poll = async () => {
+      let nextDelay = 10000
       try {
         const st = await autoUpdateAPI.getStatus()
-        if (st.data.code === 200 || st.data.code === 0) setStatus(st.data.data)
+        if (mounted && (st.data.code === 200 || st.data.code === 0)) {
+          setStatus(st.data.data)
+          const busy = st.data.data?.running || (st.data.data?.activeTasks || []).length > 0
+          nextDelay = busy ? 2000 : 10000
+        }
       } catch (e) { /* 忽略瞬时失败 */ }
-    }, 10000)
-    return () => clearInterval(timer)
+      if (mounted) timer = setTimeout(poll, nextDelay)
+    }
+    poll()
+    return () => { mounted = false; if (timer) clearTimeout(timer) }
   }, [])
 
   const patch = useCallback((key, value) => {
@@ -257,6 +267,7 @@ export function AutoUpdate() {
 
   const lastStatus = status?.lastStatus || {}
   const runs = status?.runs || []
+  const activeTasks = status?.activeTasks || []
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-4">
@@ -333,7 +344,7 @@ export function AutoUpdate() {
               <p>不等计划时间，立刻按当前白名单执行一轮。</p>
               <p className="text-xs text-gray-400 dark:text-gray-500">
                 {status?.running
-                  ? <span className="text-blue-500 flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" />正在运行...</span>
+                  ? <span className="text-blue-500 flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" />正在运行{activeTasks.length > 0 ? `（${activeTasks.filter(t => t.isDone).length}/${activeTasks.length}）` : '...'}</span>
                   : '当前空闲'}
               </p>
             </div>
@@ -350,6 +361,31 @@ export function AutoUpdate() {
           </div>
         </Card>
       </div>
+
+      {/* 进行中（实时进度） */}
+      {activeTasks.length > 0 && (
+        <div className="rounded-xl bg-white dark:bg-gray-800 border border-primary-200 dark:border-primary-800 shadow-sm">
+          <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700/60 flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-primary-500 dark:text-primary-400 animate-spin" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              进行中（{activeTasks.filter(t => t.isDone).length}/{activeTasks.length} 完成）
+            </h3>
+          </div>
+          <div className="px-5 py-3 space-y-3">
+            {activeTasks.map(t => (
+              <div key={t.taskID}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</span>
+                  {t.isDone
+                    ? <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" />完成</span>
+                    : <span className="text-xs text-gray-400 dark:text-gray-500">{t.percentage || 0}%</span>}
+                </div>
+                <ProgressBar percent={t.percentage} message={t.message} detail={t.detailMsg} done={t.isDone} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 白名单 */}
       <Card title="自动更新白名单" icon={Zap}>

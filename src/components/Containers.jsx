@@ -13,6 +13,7 @@ import {
   Info
 } from 'lucide-react'
 import { containerAPI, progressAPI, imageAPI, autoUpdateAPI } from '../api/client.js'
+import { ProgressBar } from './ProgressBar.jsx'
 import { cn } from '../utils/cn.js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getImageLogo } from '../config/imageLogos.js'
@@ -592,9 +593,11 @@ export function Containers() {
 
   // 轮询进度
   const pollProgress = async (containerId, taskID) => {
-    const maxAttempts = 60 // 最多轮询60次 (2分钟)
+    const maxAttempts = 450 // 最多约 15 分钟（大镜像拉取较久，仅作兜底）
     let attempts = 0
     let pollTimer = null
+    let stallCount = 0
+    let lastKey = ''
 
     const clearPollState = () => {
       if (pollTimer) {
@@ -644,10 +647,11 @@ export function Containers() {
           if (percentMatch) {
             percentage = Math.min(100, Math.max(0, parseFloat(percentMatch[1])))
           } else {
-            // 根据轮询次数估算进度
-            percentage = Math.min(95, (attempts / maxAttempts) * 100)
+            // 根据轮询次数估算进度（按约 4 分钟的典型时长估）
+            percentage = Math.min(95, (attempts / 120) * 100)
           }
         }
+        const detailMsg = data.data?.detailMsg || ''
 
         // 检查是否完成 - 兼容多种响应格式
         const status = data.data?.status || data.status
@@ -688,6 +692,34 @@ export function Containers() {
           return // 确保不再继续执行
         }
 
+        // 长时间无任何变化检测（正常慢拉取会有 detail 变化，真卡住才触发）
+        const key = `${percentage}|${progressMsg}|${detailMsg}`
+        if (key === lastKey) {
+          stallCount++
+        } else {
+          stallCount = 0
+          lastKey = key
+        }
+        if (stallCount >= 90) {
+          // 约 3 分钟无变化：停止自动刷新，但不断言失败
+          if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
+          setUpdateTasks(prev => {
+            const n = { ...prev }
+            delete n[containerId]
+            return n
+          })
+          setContainerActions(prev => ({
+            ...prev,
+            [containerId]: {
+              action: 'update',
+              loading: true,
+              progress: '长时间无进度变化，已暂停自动刷新（刷新页面可查看最新状态）',
+              percentage: percentage
+            }
+          }))
+          return
+        }
+
         // 更新容器操作状态，显示进度
         setContainerActions(prev => ({
           ...prev,
@@ -695,6 +727,7 @@ export function Containers() {
             action: 'update',
             loading: true,
             progress: progressMsg,
+            detail: detailMsg,
             percentage: percentage
           }
         }))
@@ -704,7 +737,7 @@ export function Containers() {
           pollTimer = setTimeout(poll, 2000) // 2秒后再次查询
         } else {
           clearPollState()
-          console.error('⏱️ 更新超时，请检查容器状态')
+          console.error('⏱️ 长时间未确认完成，请刷新页面查看')
 
         }
       } catch (error) {
@@ -1282,7 +1315,12 @@ export function Containers() {
                             {containerActions[container.id]?.loading && containerActions[container.id]?.progress ? (
                               <p className="text-xs text-blue-600 dark:text-blue-400 truncate flex items-center gap-1">
                                 <RefreshCw className="h-3 w-3 animate-spin flex-shrink-0" />
-                                <span>{containerActions[container.id].progress}</span>
+                                <span className="truncate">{containerActions[container.id].progress}</span>
+                                {containerActions[container.id].detail && (
+                                  <span className="ml-auto text-gray-400 dark:text-gray-500 font-mono flex-shrink-0 hidden sm:inline truncate max-w-[55%]">
+                                    {containerActions[container.id].detail}
+                                  </span>
+                                )}
                               </p>
                             ) : container.status === 'running' ? (
                               <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 truncate">
@@ -1303,15 +1341,23 @@ export function Containers() {
                       {!isBatchMode && (
                         <div className="flex gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50">
                           {containerActions[container.id]?.loading ? (
-                            <div className="flex-1 flex items-center justify-center space-x-2 px-1 py-1.5 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800 whitespace-nowrap">
-                              <RefreshCw className="h-4 w-4 animate-spin text-primary-600 dark:text-primary-400" />
-                              <span className="text-xs font-medium text-primary-600 dark:text-primary-400">
-                                {containerActions[container.id].action === 'start' && '启动中'}
-                                {containerActions[container.id].action === 'stop' && '停止中'}
-                                {containerActions[container.id].action === 'restart' && '重启中'}
-                                {containerActions[container.id].action === 'update' && `更新中${containerActions[container.id].percentage ? ` ${Math.round(containerActions[container.id].percentage)}%` : ''}`}
-                              </span>
-                            </div>
+                            containerActions[container.id].action === 'update' ? (
+                              <div className="flex-1 px-1 py-1.5">
+                                <ProgressBar
+                                  percent={containerActions[container.id].percentage || 0}
+                                  showPercent
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex-1 flex items-center justify-center space-x-2 px-1 py-1.5 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800 whitespace-nowrap">
+                                <RefreshCw className="h-4 w-4 animate-spin text-primary-600 dark:text-primary-400" />
+                                <span className="text-xs font-medium text-primary-600 dark:text-primary-400">
+                                  {containerActions[container.id].action === 'start' && '启动中'}
+                                  {containerActions[container.id].action === 'stop' && '停止中'}
+                                  {containerActions[container.id].action === 'restart' && '重启中'}
+                                </span>
+                              </div>
+                            )
                           ) : (
                             <>
                               {container.status === 'running' ? (
