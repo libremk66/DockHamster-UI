@@ -54,7 +54,6 @@ function parseVersion(version) {
  * 用于检查后端版本，并提示用户是否有更新
  */
 export function useVersionCheck() {
-  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false)
 
   // 查询后端版本信息
   const { data: versionData, refetch } = useQuery({
@@ -79,6 +78,7 @@ export function useVersionCheck() {
         
         // 获取远端版本信息
         let remoteVersion = 'unknown'
+        let imageUpdate = false
         
         try {
           const remoteResponse = await versionAPI.getVersion('remote')
@@ -87,6 +87,7 @@ export function useVersionCheck() {
             const remoteData = remoteResponse.data.data
             if (remoteData && typeof remoteData === 'object') {
               remoteVersion = remoteData.remoteVersion || remoteVersion
+              imageUpdate = !!remoteData.imageUpdate
             } else if (typeof remoteData === 'string') {
               remoteVersion = remoteData
             }
@@ -99,7 +100,10 @@ export function useVersionCheck() {
           backendVersion,
           remoteVersion,
           buildDate,
-          hasBackendUpdate: shouldUpdate(backendVersion, remoteVersion)
+          imageUpdate,
+          // 双保险：版本号更新 或 镜像 digest 变化，都算"有新版本"
+          hasBackendUpdate: shouldUpdate(backendVersion, remoteVersion) || imageUpdate,
+          versionUpdate: shouldUpdate(backendVersion, remoteVersion),
         }
       } catch (error) {
         console.error('获取版本信息失败:', error)
@@ -107,7 +111,9 @@ export function useVersionCheck() {
           backendVersion: 'unknown',
           remoteVersion: 'unknown',
           buildDate: '',
-          hasBackendUpdate: false
+          imageUpdate: false,
+          hasBackendUpdate: false,
+          versionUpdate: false,
         }
       }
     },
@@ -116,39 +122,21 @@ export function useVersionCheck() {
     staleTime: 30000 // 30秒内不重新请求
   })
 
-  // 更新后端
-  const updateBackend = useCallback(async () => {
-    try {
-      await versionAPI.updateProgram()
-      setShowUpdatePrompt(true)
-      // 3秒后自动刷新
-      setTimeout(() => {
-        window.location.reload()
-      }, 3000)
-    } catch (error) {
-      console.error('后端更新失败:', error)
-      alert('后端更新失败，请手动重启应用')
-    }
-  }, [])
-
   // 手动检查更新
   const checkForUpdates = useCallback(async () => {
     await refetch()
   }, [refetch])
 
   return {
-    // 状态
-    showUpdatePrompt,
-    
     // 版本数据
     backendVersion: versionData?.backendVersion,
     remoteVersion: versionData?.remoteVersion,
     buildDate: versionData?.buildDate,
     hasBackendUpdate: versionData?.hasBackendUpdate,
-    
+    imageUpdate: versionData?.imageUpdate,
+    versionUpdate: versionData?.versionUpdate,
+
     // 方法
-    setShowUpdatePrompt,
-    updateBackend,
     checkForUpdates
   }
 }

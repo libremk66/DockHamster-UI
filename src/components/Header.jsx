@@ -11,7 +11,6 @@ import {
   RefreshCw
 } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle.jsx'
-import { UpdatePrompt } from './UpdatePrompt.jsx'
 import { cn } from '../utils/cn.js'
 import logoImg from '../assets/dockhamster-logo.png'
 import { useVersionCheck } from '../hooks/useVersionCheck.js'
@@ -48,13 +47,12 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
 
   // 使用版本检查 Hook
   const {
-    showUpdatePrompt,
-    setShowUpdatePrompt,
     backendVersion,
     remoteVersion,
     buildDate,
     hasBackendUpdate,
-    updateBackend,
+    imageUpdate,
+    versionUpdate,
     checkForUpdates
   } = useVersionCheck()
 
@@ -331,7 +329,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                     title="查看更新方式"
                   >
                     <ArrowUpCircle className="h-3.5 w-3.5" />
-                    有新版本 {remoteVersion}
+                    {versionUpdate ? `有新版本 ${remoteVersion}` : '有新版本（镜像已更新）'}
                   </button>
                 ) : (
                   remoteVersion && remoteVersion !== 'unknown' ? (
@@ -363,8 +361,15 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
               <div className="flex items-center justify-center gap-2 py-2">
                 <span className="font-mono text-gray-400">{backendVersion || '—'}</span>
                 <span className="text-gray-300">→</span>
-                <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{remoteVersion}</span>
+                <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                  {versionUpdate ? remoteVersion : '镜像已更新'}
+                </span>
               </div>
+              {!versionUpdate && imageUpdate && (
+                <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                  检测到镜像仓库已发布新版本（版本号未变，可能是构建修复）
+                </p>
+              )}
               <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3 space-y-2">
                 <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">Docker 部署怎么更新？</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -388,16 +393,7 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
 
 
 
-      {/* 版本更新提示弹窗 */}
-      <UpdatePrompt
-        isVisible={showUpdatePrompt}
-        onClose={() => setShowUpdatePrompt(false)}
-        backendVersion={backendVersion}
-        remoteVersion={remoteVersion}
-        hasBackendUpdate={hasBackendUpdate}
-        onUpdateBackend={updateBackend}
-      />
-    </>
+      {/* 版本更新提示弹窗 */}    </>
   )
 }
 
