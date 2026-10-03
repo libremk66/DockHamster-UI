@@ -1,17 +1,18 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Play,
   Square,
   RotateCcw,
   RefreshCw,
   Upload,
+  Zap,
   Clock,
   Calendar,
   Package,
   X,
   Info
 } from 'lucide-react'
-import { containerAPI, progressAPI, imageAPI } from '../api/client.js'
+import { containerAPI, progressAPI, imageAPI, autoUpdateAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getImageLogo } from '../config/imageLogos.js'
@@ -65,6 +66,19 @@ function formatRunningTime(runningTime) {
   return result.trim()
 }
 
+// 自动更新状态徽标（上次自动更新结果，显示在运行时间后面）
+function AutoUpdateBadge({ info }) {
+  if (!info) return null
+  return (
+    <span
+      className={cn("inline-flex items-center gap-0.5 flex-shrink-0", info.ok ? "text-emerald-500" : "text-red-500")}
+      title={`上次自动更新：${info.time} ${info.message || ''}`}
+    >
+      · <Zap className="h-3 w-3" />{info.time ? info.time.slice(5, 16) : ''}{info.ok ? '✓' : '✕'}
+    </span>
+  )
+}
+
 export function Containers() {
   const queryClient = useQueryClient()
   const [selectedContainer, setSelectedContainer] = useState(null)
@@ -86,6 +100,11 @@ export function Containers() {
     onCancel: null,
     type: 'info' // info, warning, danger
   })
+
+  // 自动更新（定制功能）：配置、运行状态、共用镜像弹窗
+  const [autoSettings, setAutoSettings] = useState(null)
+  const [autoStatus, setAutoStatus] = useState(null)
+  const [groupModal, setGroupModal] = useState({ isOpen: false, container: null, siblings: [] })
 
 
 
@@ -143,6 +162,47 @@ export function Containers() {
     // 即使有初始数据，也立即在后台刷新
     refetchOnMount: true,
   })
+
+  // 自动更新配置与状态（定制版接口；老后端无此接口时静默忽略）
+  useEffect(() => {
+    let mounted = true
+    const loadAuto = async () => {
+      try {
+        const [s, st] = await Promise.all([autoUpdateAPI.getSettings(), autoUpdateAPI.getStatus()])
+        if (!mounted) return
+        if (s.data.code === 200) setAutoSettings(s.data.data)
+        if (st.data.code === 200) setAutoStatus(st.data.data)
+      } catch (e) {
+        // 老后端 / 接口不可用时忽略
+      }
+    }
+    loadAuto()
+    const timer = setInterval(loadAuto, 15000)
+    return () => { mounted = false; clearInterval(timer) }
+  }, [])
+
+  // 容器卡片上的「自动」开关：即时写入白名单
+  const toggleAutoUpdate = async (container, e) => {
+    if (e) e.stopPropagation()
+    if (!autoSettings) return
+    const current = autoSettings.containers || []
+    if (current.includes('*')) return // 全部容器模式下不单独切换
+    const next = current.includes(container.name)
+      ? current.filter(n => n !== container.name)
+      : [...current, container.name]
+    try {
+      const r = await autoUpdateAPI.saveSettings({ ...autoSettings, containers: next })
+      if (r.data.code === 200) setAutoSettings(r.data.data)
+    } catch (err) {
+      console.error('保存自动更新设置失败:', err)
+    }
+  }
+
+  const isAutoEnabled = (name) => {
+    if (!autoSettings) return false
+    const list = autoSettings.containers || []
+    return list.includes('*') || list.includes(name)
+  }
 
   const handleContainerAction = async (containerId, action) => {
     try {
@@ -360,7 +420,62 @@ export function Containers() {
     }
   }
 
+  // 更新入口：若该镜像被多个容器共用，先弹窗确认（方案 A：全部更新 / 仅此容器）
   const handleUpdateContainer = async (containerId, existingTaskID = null) => {
+    if (!existingTaskID) {
+      const container = containers.find(c => c.id === containerId)
+      if (container && container.imageId) {
+        const siblings = containers.filter(c => c.imageId === container.imageId && c.id !== containerId)
+        if (siblings.length > 0) {
+          setGroupModal({ isOpen: true, container, siblings })
+          return
+        }
+      }
+    }
+    return doUpdateContainer(containerId, existingTaskID)
+  }
+
+  // 整组更新：后端统一拉取一次，逐个更新共用该镜像的所有容器
+  const handleGroupUpdate = async () => {
+    const target = groupModal.container
+    setGroupModal({ isOpen: false, container: null, siblings: [] })
+    if (!target) return
+    try {
+      const response = await autoUpdateAPI.updateGroup(target.id)
+      if (response.data.code === 200) {
+        const tasks = response.data.data?.tasks || []
+        tasks.forEach(t => {
+          setContainerActions(prev => ({
+            ...prev,
+            [t.id]: { action: 'update', loading: true, progress: '整组更新中...', percentage: 0 }
+          }))
+          setUpdateTasks(prev => ({ ...prev, [t.id]: t.taskID }))
+          pollProgress(t.id, t.taskID)
+        })
+      } else {
+        setConfirmModal({
+          isOpen: true,
+          title: '整组更新失败',
+          message: response.data.msg || '未知错误',
+          onConfirm: () => setConfirmModal({ isOpen: false }),
+          onCancel: null,
+          type: 'danger'
+        })
+      }
+    } catch (error) {
+      console.error('整组更新失败:', error)
+      setConfirmModal({
+        isOpen: true,
+        title: '整组更新失败',
+        message: error.response?.data?.msg || error.message || '未知错误',
+        onConfirm: () => setConfirmModal({ isOpen: false }),
+        onCancel: null,
+        type: 'danger'
+      })
+    }
+  }
+
+  const doUpdateContainer = async (containerId, existingTaskID = null) => {
     try {
       const container = containers.find(c => c.id === containerId)
       if (!container) {
@@ -704,6 +819,65 @@ export function Containers() {
                 )}
               >
                 确认
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 共用镜像整组更新弹窗（方案 A） */}
+      {groupModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <Zap className="h-5 w-5 text-amber-500" />
+                共用镜像提示
+              </h3>
+              <button
+                onClick={() => setGroupModal({ isOpen: false, container: null, siblings: [] })}
+                className="text-gray-400 hover:text-gray-500 dark:text-gray-400 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                容器 <span className="font-medium text-gray-900 dark:text-white">{groupModal.container?.name}</span> 使用的镜像
+                <span className="font-mono text-xs mx-1 break-all">{groupModal.container?.usingImage}</span>
+                还被以下 {groupModal.siblings.length} 个容器共用：
+              </p>
+              <ul className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/30 rounded-lg px-3 py-2 space-y-1 max-h-40 overflow-y-auto">
+                {groupModal.siblings.map(s => (
+                  <li key={s.id} className="flex items-center gap-2">
+                    <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", s.status === 'running' ? 'bg-emerald-500' : 'bg-gray-400')} />
+                    <span className="truncate">{s.name}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                「全部更新」将依次更新所有共用该镜像的容器（同一镜像只拉取一次；各自保持原有运行/停止状态）。
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 flex justify-end space-x-3">
+              <button
+                onClick={() => setGroupModal({ isOpen: false, container: null, siblings: [] })}
+                className="btn-secondary"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  const target = groupModal.container
+                  setGroupModal({ isOpen: false, container: null, siblings: [] })
+                  if (target) doUpdateContainer(target.id)
+                }}
+                className="btn-secondary"
+              >
+                仅此容器
+              </button>
+              <button onClick={handleGroupUpdate} className="btn-primary">
+                全部更新
               </button>
             </div>
           </div>
@@ -1092,12 +1266,14 @@ export function Containers() {
                                 <span>{containerActions[container.id].progress}</span>
                               </p>
                             ) : container.status === 'running' ? (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                运行: {formatRunningTime(container.runningTime)}
+                              <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 truncate">
+                                <span className="truncate">运行: {formatRunningTime(container.runningTime)}</span>
+                                <AutoUpdateBadge info={autoStatus?.lastStatus?.[container.name]} />
                               </div>
                             ) : (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                状态: 已停止
+                              <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 truncate">
+                                <span className="truncate">状态: 已停止</span>
+                                <AutoUpdateBadge info={autoStatus?.lastStatus?.[container.name]} />
                               </div>
                             )}
                           </div>
@@ -1161,6 +1337,22 @@ export function Containers() {
                               >
                                 <Upload className="h-4 w-4" />
                                 <span>更新</span>
+                              </button>
+
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleAutoUpdate(container, e) }}
+                                disabled={!autoSettings}
+                                className={cn(
+                                  "flex items-center justify-center gap-1 px-2 py-1.5 bg-white dark:bg-gray-800 border rounded-lg transition-all duration-200 shadow-sm hover:shadow active:scale-95 text-xs font-medium whitespace-nowrap",
+                                  !autoSettings
+                                    ? "text-gray-300 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed"
+                                    : isAutoEnabled(container.name)
+                                      ? "text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20"
+                                      : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                                )}
+                                title={!autoSettings ? '自动更新不可用（需要定制版后端）' : (isAutoEnabled(container.name) ? '自动更新：已开启（点击关闭）' : '自动更新：已关闭（点击开启）')}
+                              >
+                                <Zap className="h-4 w-4" />
                               </button>
                             </>
                           )}

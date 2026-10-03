@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Auth } from './components/Auth.jsx'
 import { Sidebar, MobileBottomNav } from './components/Header.jsx'
 import { Containers } from './components/Containers.jsx'
+import { AutoUpdate } from './components/AutoUpdate.jsx'
 import { Images } from './components/Images.jsx'
 import { Backups } from './components/Backups.jsx'
 import { Icons } from './components/Icons.jsx'
@@ -133,6 +134,8 @@ function AppContent() {
     switch (activeTab) {
       case '#containers':
         return <Containers />
+      case '#autoupdate':
+        return <AutoUpdate />
       case '#images':
         return <Images />
       case '#icons':

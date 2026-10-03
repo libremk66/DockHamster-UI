@@ -149,6 +149,16 @@ export const progressAPI = {
   getProgress: (taskid) => apiClient.get(`/api/progress/${taskid}`),
 }
 
+// 自动更新相关API
+export const autoUpdateAPI = {
+  getSettings: () => apiClient.get('/api/autoUpdate/settings'),
+  saveSettings: (settings) => apiClient.post('/api/autoUpdate/settings', settings),
+  run: () => apiClient.post('/api/autoUpdate/run'),
+  getStatus: () => apiClient.get('/api/autoUpdate/status'),
+  testNotify: (webhook) => apiClient.post('/api/autoUpdate/testNotify', { webhook: webhook || '' }),
+  updateGroup: (containerId) => apiClient.post(`/api/container/${containerId}/updateGroup`),
+}
+
 // GitHub API - 用于检查前端更新
 export const githubAPI = {
   /**

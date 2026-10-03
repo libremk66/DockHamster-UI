@@ -4,7 +4,8 @@ import {
   LogOut,
   Server,
   DatabaseBackup,
-  Info
+  Info,
+  RefreshCw
 } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle.jsx'
 import { UpdatePrompt } from './UpdatePrompt.jsx'
@@ -69,6 +70,11 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       id: '#containers',
       label: '容器',
       icon: Server,
+    },
+    {
+      id: '#autoupdate',
+      label: '自动更新',
+      icon: RefreshCw,
     },
     {
       id: '#images',
@@ -360,6 +366,11 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       id: '#containers',
       label: '容器',
       icon: Server,
+    },
+    {
+      id: '#autoupdate',
+      label: '自动更新',
+      icon: RefreshCw,
     },
     {
       id: '#images',
