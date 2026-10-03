@@ -334,9 +334,14 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                     有新版本 {remoteVersion}
                   </button>
                 ) : (
-                  <div className="text-center text-[10px] text-gray-400 dark:text-gray-500">
-                    {remoteVersion && remoteVersion !== 'unknown' ? `已是最新（${remoteVersion}）` : '版本检查不可用'}
-                  </div>
+                  remoteVersion && remoteVersion !== 'unknown' ? (
+                    <div className="text-center text-[10px] text-gray-400 dark:text-gray-500" title="已是最新版本">
+                      已是最新（{remoteVersion}）
+                    </div>
+                  ) : (
+                    // 检查失败（无外网 / GitHub 不可达）时不打扰用户，下一页刷新自动重试
+                    <div className="text-center text-[10px] text-transparent select-none" title="">·</div>
+                  )
                 )}
               </div>
             )}
