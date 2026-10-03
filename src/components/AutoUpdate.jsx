@@ -152,6 +152,8 @@ export function AutoUpdate() {
   }, [])
 
   // 状态刷新：运行中 2 秒一次（实时进度），空闲 10 秒一次
+  // refreshKey 变化时立即重新拉取（点「立即运行」后马上看到进行中面板）
+  const [refreshKey, setRefreshKey] = useState(0)
   useEffect(() => {
     let mounted = true
     let timer = null
@@ -169,7 +171,7 @@ export function AutoUpdate() {
     }
     poll()
     return () => { mounted = false; if (timer) clearTimeout(timer) }
-  }, [])
+  }, [refreshKey])
 
   const patch = useCallback((key, value) => {
     setSettings(prev => (prev ? { ...prev, [key]: value } : prev))
@@ -212,8 +214,12 @@ export function AutoUpdate() {
     setMsg(null)
     try {
       const r = await autoUpdateAPI.run()
-      if (r.data.code === 200) setMsg({ type: 'ok', text: '已开始运行，稍后可在下方「运行记录」查看结果' })
-      else setMsg({ type: 'err', text: r.data.msg || '运行失败' })
+      if (r.data.code === 200) {
+        setMsg({ type: 'ok', text: '已开始运行，下方会实时显示进度' })
+        setRefreshKey(k => k + 1) // 立即刷新一次，马上显示「进行中」面板
+      } else {
+        setMsg({ type: 'err', text: r.data.msg || '运行失败' })
+      }
     } catch (e) {
       setMsg({ type: 'err', text: e.response?.data?.msg || e.message || '运行失败' })
     }
