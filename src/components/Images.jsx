@@ -36,7 +36,8 @@ export function Images() {
   // 快照（旧镜像回滚）
   const [snapshots, setSnapshots] = useState([])
   const [containers, setContainers] = useState([])
-  const [rollbackTarget, setRollbackTarget] = useState(null) // {containerName, ref, candidates}
+  const [rollbackTarget, setRollbackTarget] = useState(null)
+  const [checkingUpdates, setCheckingUpdates] = useState(false) // {containerName, ref, candidates}
 
   // 获取自定义图标配置
   const { data: customIcons = {} } = useQuery({
@@ -133,6 +134,25 @@ export function Images() {
       }
     } catch (e) {
       setError(e.response?.data?.msg || e.message || '删除失败')
+    }
+  }
+
+  // 「检查更新」：立即探测一轮
+  const checkUpdatesNow = async () => {
+    setCheckingUpdates(true)
+    try {
+      const r = await autoUpdateAPI.checkNow()
+      if (r.data?.code === 200) {
+        const d = r.data.data || {}
+        setSuccessModal({ isOpen: true, message: r.data.msg || `已检查 ${d.checked || 0} 个镜像` })
+        fetchImages()
+      } else {
+        setError(r.data?.msg || '检查失败')
+      }
+    } catch (e) {
+      setError(e.response?.data?.msg || e.message || '检查失败')
+    } finally {
+      setCheckingUpdates(false)
     }
   }
 
@@ -500,6 +520,15 @@ export function Images() {
                   ? `共 ${images.length} 个镜像`
                   : `筛选出 ${visibleImages.length} / ${images.length} 个镜像`}
             </span>
+            <button
+              onClick={checkUpdatesNow}
+              disabled={checkingUpdates}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 disabled:opacity-50"
+              title="立即去 registry 检查一遍有没有新版本"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', checkingUpdates && 'animate-spin')} />
+              {checkingUpdates ? '检查中…' : '检查更新'}
+            </button>
             {filterStatus === 'snapshot' && snapshots.length > 0 && (
               <button
                 onClick={pruneSnapshots}

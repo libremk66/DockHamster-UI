@@ -154,6 +154,7 @@ export const autoUpdateAPI = {
   getSettings: () => apiClient.get('/api/autoUpdate/settings'),
   saveSettings: (settings) => apiClient.post('/api/autoUpdate/settings', settings),
   run: () => apiClient.post('/api/autoUpdate/run'),
+  checkNow: () => apiClient.post('/api/autoUpdate/check', {}, { timeout: 180000 }),
   getStatus: () => apiClient.get('/api/autoUpdate/status'),
   testNotify: (channel, config) => apiClient.post('/api/autoUpdate/testNotify', { channel, config: config || {} }),
   updateGroup: (containerId) => apiClient.post(`/api/container/${containerId}/updateGroup`),

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import {
   Zap,
   Save,
+  Search,
   Play,
   Bell,
   Send,
@@ -124,6 +125,7 @@ export function AutoUpdate() {
   const [testing, setTesting] = useState(false)
   const [loadErr, setLoadErr] = useState(false)
   const [snapStats, setSnapStats] = useState(null)
+  const [checking, setChecking] = useState(false)
 
   const loadSnapStats = useCallback(async () => {
     try {
@@ -206,6 +208,21 @@ export function AutoUpdate() {
   }
 
   const globalPolicy = settings?.oldImagePolicy || 'clean'
+
+  const checkNow = async () => {
+    setChecking(true); setMsg(null)
+    try {
+      const r = await autoUpdateAPI.checkNow()
+      if (r.data.code === 200) {
+        setMsg({ type: 'ok', text: r.data.msg || '检查完成' })
+        setRefreshKey(k => k + 1)
+      } else {
+        setMsg({ type: 'err', text: r.data?.msg || '检查失败' })
+      }
+    } catch (e) {
+      setMsg({ type: 'err', text: e.response?.data?.msg || e.message || '检查失败' })
+    } finally { setChecking(false) }
+  }
 
   const pruneSnapshots = async () => {
     setMsg(null)
@@ -365,6 +382,33 @@ export function AutoUpdate() {
             <p className="text-xs text-gray-400 dark:text-gray-500">
               分 时 日 月 周 ｜ 示例：<code>0 4 * * *</code>＝每天 04:00；<code>30 3 * * 6</code>＝每周六 03:30
             </p>
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-700/60 space-y-2">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <Search className="h-3.5 w-3.5 text-gray-400" />更新检查频率
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={settings.checkCron ?? '30 * * * *'}
+                    onChange={(e) => patch('checkCron', e.target.value)}
+                    className="w-36 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 font-mono text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="30 * * * *"
+                  />
+                  <button
+                    onClick={checkNow}
+                    disabled={checking}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn('h-3.5 w-3.5', checking && 'animate-spin')} />立即检查
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                只<b>探测</b>有没有新版本（刷新角标），不碰容器；与上面的自动更新（到点<b>执行</b>更新）互相独立，建议检查比更新更勤
+              </p>
+            </div>
+
             <div className="pt-2 border-t border-gray-100 dark:border-gray-700/60 space-y-2">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">更新完成后的旧镜像处理</span>
