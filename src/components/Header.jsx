@@ -4,6 +4,7 @@ import {
   LogOut,
   Server,
   DatabaseBackup,
+  Package,
   Info,
   RefreshCw
 } from 'lucide-react'
@@ -85,6 +86,11 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       id: '#backups',
       label: '备份',
       icon: DatabaseBackup,
+    },
+    {
+      id: '#migrate',
+      label: '迁移',
+      icon: Package,
     },
     {
       id: '#about',
@@ -368,6 +374,11 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       id: '#backups',
       label: '备份',
       icon: DatabaseBackup,
+    },
+    {
+      id: '#migrate',
+      label: '迁移',
+      icon: Package,
     },
     {
       id: '#about',

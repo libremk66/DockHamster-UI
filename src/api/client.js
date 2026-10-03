@@ -120,7 +120,8 @@ export const containerAPI = {
   backupContainer: () => apiClient.get('/api/container/backup'),
   listBackups: () => apiClient.get('/api/container/listBackups'),
   restoreContainer: (filename) => {
-    return apiClient.post(`/api/container/backups/${filename}/restore`)
+    // 后端路由是 POST /api/container/backups/restore，文件名在 JSON body 里
+    return apiClient.post('/api/container/backups/restore', { filename })
   },
   deleteBackup: (filename) => apiClient.delete(`/api/container/backups?filename=${encodeURIComponent(filename)}`),
   backupToCompose: () => apiClient.get('/api/container/backup2compose'),
@@ -163,6 +164,24 @@ export const autoUpdateAPI = {
   rollbackSnapshot: (containerName, ref) => apiClient.post('/api/snapshot/rollback', { containerName, ref }),
   pruneSnapshots: (keep) => apiClient.post('/api/snapshot/prune', keep ? { keep } : {}),
   deleteSnapshots: (refs) => apiClient.delete(`/api/snapshot?refs=${encodeURIComponent((refs || []).join(','))}`),
+  // 容器迁移
+  migrateImageReport: () => apiClient.get('/api/migrate/images/report'),
+  migrateTagImage: (imageId, ref) => apiClient.post('/api/migrate/images/tag', { imageId, ref }),
+  migrateExport: (options) => apiClient.post('/api/migrate/exports', options || {}),
+  migrateListExports: () => apiClient.get('/api/migrate/exports'),
+  migrateDeleteExport: (file) => apiClient.delete(`/api/migrate/exports?file=${encodeURIComponent(file)}`),
+  migrateDownloadUrl: (file) => `/api/migrate/exports/download?file=${encodeURIComponent(file)}`,
+  migrateUpload: (file, onProgress) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return apiClient.post('/api/migrate/imports/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onProgress,
+      timeout: 0,
+    })
+  },
+  migratePlan: (file) => apiClient.post('/api/migrate/imports/plan', { file }),
+  migrateApply: (payload) => apiClient.post('/api/migrate/imports/apply', payload),
 }
 
 // GitHub API - 用于检查前端更新

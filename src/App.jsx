@@ -5,6 +5,7 @@ import { Containers } from './components/Containers.jsx'
 import { AutoUpdate } from './components/AutoUpdate.jsx'
 import { Images } from './components/Images.jsx'
 import { Backups } from './components/Backups.jsx'
+import { Migrate } from './components/Migrate.jsx'
 import { Icons } from './components/Icons.jsx'
 import { About } from './components/About.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
@@ -142,6 +143,8 @@ function AppContent() {
         return <Icons />
       case '#backups':
         return <Backups />
+        case '#migrate':
+          return <Migrate />
       case '#about':
         return <About />
       default:
