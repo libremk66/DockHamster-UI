@@ -2,6 +2,11 @@
 
 > **您的Docker容器智能助手** - 一个简洁、优雅、强大的容器管理平台
 
+> 📌 本仓库为 [dongshull/Docker-Copilot-React](https://github.com/dongshull/Docker-Copilot-React) 的 fork。
+> `custom` 分支是 [libremk66/DockerCopilotMe](https://github.com/libremk66/DockerCopilotMe)（增强版后端）的**配套前端**：
+> 新增自动更新页、容器/镜像列表化与搜索、更新进度子行等；上游 `master` 保持原样。
+> 后端构建时自动取用本分支（见 DockerCopilotMe 的 `.github/workflows/custom-build.yml`）。
+
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite&logoColor=white)
