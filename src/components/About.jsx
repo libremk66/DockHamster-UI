@@ -1,16 +1,8 @@
 import React from 'react'
-import { Github, GitFork, Sparkles, ExternalLink, Heart } from 'lucide-react'
+import { Sparkles, Heart } from 'lucide-react'
 import logoImg from '../assets/dockhamster-logo.png'
 
-const UPSTREAM_LINKS = [
-  { name: 'onlyLTY/dockerCopilot', desc: '原项目（后端）', url: 'https://github.com/onlyLTY/dockerCopilot' },
-  { name: 'dongshull/Docker-Copilot-React', desc: '原项目（前端）', url: 'https://github.com/dongshull/Docker-Copilot-React' },
-]
 
-const ME_LINKS = [
-  { name: 'libremk66/DockHamster', desc: '本项目（后端 + 文档）', url: 'https://github.com/libremk66/DockHamster' },
-  { name: 'libremk66/DockHamster-UI', desc: '本项目（前端）', url: 'https://github.com/libremk66/DockHamster-UI' },
-]
 
 const IMPROVEMENTS = [
   { title: '自动更新（UI 配置）', desc: '白名单容器按 cron 计划自动更新；容器页开关一键加入/移出白名单，带运行记录与每容器最近结果' },
@@ -22,25 +14,6 @@ const IMPROVEMENTS = [
   { title: '上游修复', desc: '修复多 RepoDigests 时"永远提示有更新"、检查缓存并发安全、更新时保持容器原有运行状态' },
 ]
 
-function LinkRow({ icon: Icon, name, desc, url }) {
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700/60 hover:border-primary-200 dark:hover:border-primary-800 hover:bg-primary-50/50 dark:hover:bg-primary-900/10 transition-colors"
-    >
-      <Icon className="h-4 w-4 text-gray-400 group-hover:text-primary-600 dark:group-hover:text-primary-400 flex-shrink-0" />
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-primary-600 dark:group-hover:text-primary-400">
-          {name}
-        </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500">{desc}</div>
-      </div>
-      <ExternalLink className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600 group-hover:text-primary-500 flex-shrink-0" />
-    </a>
-  )
-}
 
 export function About() {
   return (
@@ -54,33 +27,6 @@ export function About() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               基于 onlyLTY/dockerCopilot 的社区增强版（AGPL-3.0）· Docker 容器管理工具
             </p>
-          </div>
-        </div>
-
-        {/* 项目地址 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Github className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">原项目地址</h3>
-            </div>
-            <div className="space-y-2">
-              {UPSTREAM_LINKS.map((l) => (
-                <LinkRow key={l.url} icon={ExternalLink} {...l} />
-              ))}
-            </div>
-          </div>
-
-          <div className="card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <GitFork className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">本项目地址</h3>
-            </div>
-            <div className="space-y-2">
-              {ME_LINKS.map((l) => (
-                <LinkRow key={l.url} icon={ExternalLink} {...l} />
-              ))}
-            </div>
           </div>
         </div>
 
