@@ -335,8 +335,9 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                   </button>
                 ) : (
                   remoteVersion && remoteVersion !== 'unknown' ? (
+                    // 显示"本地版本"而不是远端值：CDN 有缓存延迟，远端可能短暂落后而导致号码看起来不对
                     <div className="text-center text-[10px] text-gray-400 dark:text-gray-500" title="已是最新版本">
-                      已是最新（{remoteVersion}）
+                      已是最新 · {backendVersion || '—'}
                     </div>
                   ) : (
                     // 检查失败（无外网 / GitHub 不可达）时不打扰用户，下一页刷新自动重试
