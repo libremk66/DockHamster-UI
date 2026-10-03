@@ -35,8 +35,10 @@ function shouldUpdate(currentVersion, latestVersion) {
  */
 function parseVersion(version) {
   if (!version || typeof version !== 'string') return null
-  
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/)
+
+  // 兼容 "v1.2.3" / "V1.2.3" 前缀（本项目的版本号带 v，不处理的话更新提示永远不触发）
+  const normalized = version.trim().replace(/^[vV]/, '')
+  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/)
   if (!match) return null
   
   return {

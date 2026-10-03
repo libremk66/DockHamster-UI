@@ -6,6 +6,8 @@ import {
   DatabaseBackup,
   Package,
   Info,
+  Github,
+  ArrowUpCircle,
   RefreshCw
 } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle.jsx'
@@ -16,6 +18,8 @@ import { useVersionCheck } from '../hooks/useVersionCheck.js'
 
 export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false, onToggleCollapse, windowWidth = 1024 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
+  const [showUpdateHint, setShowUpdateHint] = React.useState(false)
+  const PROJECT_URL = 'https://github.com/libremk66/DockHamster'
 
   // 时间格式转换函数 - 将UTC时间转换为北京时间
   const formatVersionBuildDate = (dateString) => {
@@ -282,12 +286,17 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                   <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-400/50 dark:shadow-emerald-600/50" title={`运行中 - ${backendVersion || 'v1.0'}`} />
                 </div>
 
-                {/* 开发人员 - 首字母 */}
+                {/* 项目主页 */}
                 <div className="flex justify-center">
-                  <div className="flex -space-x-1.5">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[10px] font-semibold text-blue-600 dark:text-blue-400 ring-2 ring-white dark:ring-gray-800">D</span>
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/40 text-[10px] font-semibold text-purple-600 dark:text-purple-400 ring-2 ring-white dark:ring-gray-800">O</span>
-                  </div>
+                  <a
+                    href={PROJECT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200 transition-colors"
+                    title="项目主页（GitHub）"
+                  >
+                    <Github className="h-5 w-5" />
+                  </a>
                 </div>
 
                 {/* 更新提示 */}
@@ -298,44 +307,78 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                 )}
               </div>
             ) : (
-              // 展开状态 - 简洁卡片
-              <div className="space-y-2.5">
-                {/* 版本状态行 */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">运行中</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {backendVersion || 'v1.0'}
-                    </span>
-                  </div>
+              // 展开状态
+              <div className="space-y-2">
+                {/* 项目主页 + 当前版本 */}
+                <div className="flex items-center justify-center gap-2 px-1">
+                  <a
+                    href={PROJECT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200 transition-colors"
+                    title="项目主页（GitHub）"
+                  >
+                    <Github className="h-4 w-4" />
+                  </a>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{backendVersion || 'v1.0'}</span>
                 </div>
 
-                {/* 构建日期 + 更新提示 */}
-                <div className="flex items-center justify-between px-1">
-                  {buildDate ? (
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500" title={formatVersionBuildDate(buildDate)}>
-                      构建 {formatVersionBuildDate(buildDate).split(' ')[0]}
-                    </span>
-                  ) : (
-                    <span />
-                  )}
-                  {hasBackendUpdate && (
-                    <button
-                      onClick={() => setShowUpdatePrompt(true)}
-                      className="text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
-                    >
-                      有新版本 →
-                    </button>
-                  )}
-                </div>
+                {/* 最新版本提示 */}
+                {hasBackendUpdate ? (
+                  <button
+                    onClick={() => setShowUpdateHint(true)}
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/60 text-[11px] font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                    title="查看更新方式"
+                  >
+                    <ArrowUpCircle className="h-3.5 w-3.5" />
+                    有新版本 {remoteVersion}
+                  </button>
+                ) : (
+                  <div className="text-center text-[10px] text-gray-400 dark:text-gray-500">
+                    {remoteVersion && remoteVersion !== 'unknown' ? `已是最新（${remoteVersion}）` : '版本检查不可用'}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       </aside>
+
+      {/* 更新指引弹窗（Docker 部署场景：面板不能"自己更新自己"，给出正确路径） */}
+      {showUpdateHint && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setShowUpdateHint(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+              <ArrowUpCircle className="h-5 w-5 text-amber-500" />
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white flex-1">有新版本可用</h3>
+              <button onClick={() => setShowUpdateHint(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
+              <div className="flex items-center justify-center gap-2 py-2">
+                <span className="font-mono text-gray-400">{backendVersion || '—'}</span>
+                <span className="text-gray-300">→</span>
+                <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{remoteVersion}</span>
+              </div>
+              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">Docker 部署怎么更新？</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <b className="text-gray-700 dark:text-gray-300">① 面板内更新（推荐）</b>：打开「容器」页 → 找到 <span className="font-mono">dockhamster</span> 容器 → 点「更新」，会自动拉取新镜像并重建，<b>配置数据保留</b>。
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <b className="text-gray-700 dark:text-gray-300">② 命令行</b>：<code className="font-mono bg-white dark:bg-gray-800 px-1 rounded">docker compose pull &amp;&amp; docker compose up -d</code>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">更新前建议先看一眼版本说明，确认没有破坏性变更。</p>
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700 flex gap-3">
+              <button onClick={() => setShowUpdateHint(false)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">知道了</button>
+              <a href={`${PROJECT_URL}/releases`} target="_blank" rel="noopener noreferrer"
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors text-center">查看版本说明</a>
+            </div>
+          </div>
+        </div>
+      )}
 
 
 
