@@ -192,9 +192,28 @@ export function Containers() {
       : [...current, container.name]
     try {
       const r = await autoUpdateAPI.saveSettings({ ...autoSettings, containers: next })
-      if (r.data.code === 200) setAutoSettings(r.data.data)
+      if (r.data.code === 200 || r.data.code === 0) {
+        setAutoSettings(r.data.data)
+      } else {
+        setConfirmModal({
+          isOpen: true,
+          title: '自动更新设置保存失败',
+          message: r.data.msg || '未知错误',
+          onConfirm: () => setConfirmModal({ isOpen: false }),
+          onCancel: null,
+          type: 'danger'
+        })
+      }
     } catch (err) {
       console.error('保存自动更新设置失败:', err)
+      setConfirmModal({
+        isOpen: true,
+        title: '自动更新设置保存失败',
+        message: err.response?.data?.msg || err.message || '未知错误',
+        onConfirm: () => setConfirmModal({ isOpen: false }),
+        onCancel: null,
+        type: 'danger'
+      })
     }
   }
 
