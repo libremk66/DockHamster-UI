@@ -11,6 +11,7 @@ import {
   RefreshCw
 } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle.jsx'
+import { SelfUpdateSection } from './SelfUpdate.jsx'
 import { cn } from '../utils/cn.js'
 import logoImg from '../assets/dockhamster-logo.png'
 import { useVersionCheck } from '../hooks/useVersionCheck.js'
@@ -370,12 +371,10 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
                   检测到镜像仓库已发布新版本（版本号未变，可能是构建修复）
                 </p>
               )}
-              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3 space-y-2">
-                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">Docker 部署怎么更新？</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  <b className="text-gray-700 dark:text-gray-300">① 面板内更新（推荐）</b>：打开「容器」页 → 找到 <span className="font-mono">dockhamster</span> 容器 → 点「更新」，会自动拉取新镜像并重建，<b>配置数据保留</b>。
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
+              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3 space-y-3">
+                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">怎么更新面板本体？</div>
+                <SelfUpdateSection />
+                <div className="text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-2">
                   <b className="text-gray-700 dark:text-gray-300">② 命令行</b>：<code className="font-mono bg-white dark:bg-gray-800 px-1 rounded">docker compose pull &amp;&amp; docker compose up -d</code>
                 </div>
               </div>

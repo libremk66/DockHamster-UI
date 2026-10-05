@@ -12,7 +12,8 @@ import {
   X,
   Info,
   Search,
-  History
+  History,
+  ExternalLink
 } from 'lucide-react'
 import { containerAPI, progressAPI, imageAPI, autoUpdateAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
@@ -20,55 +21,11 @@ import { CheckUpdateButton } from './CheckUpdateButton.jsx'
 import { cn } from '../utils/cn.js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getImageLogo } from '../config/imageLogos.js'
+import { formatRunningTime } from '../utils/format.js'
+import { containerWebUrl } from '../utils/webFavicon.js'
+import { ContainerLogo } from './ContainerLogo.jsx'
 import icons8Img from '../assets/icons8.png'
 
-// 格式化运行时间为中文
-function formatRunningTime(runningTime) {
-  if (!runningTime) return '未知'
-
-  // 如果已经是中文格式，直接返回
-  if (runningTime.includes('小时') || runningTime.includes('分钟') || runningTime.includes('秒')) {
-    return runningTime
-  }
-
-  // 尝试解析英文格式
-  // 支持格式: "2h 30m", "2 hours 30 minutes", "30m", "30 minutes", "1 day 2h 30m" 等
-  let hours = 0
-  let minutes = 0
-  let days = 0
-
-  // 提取天数
-  const dayMatch = runningTime.match(/(\d+)\s*(?:day|d)/)
-  if (dayMatch) {
-    days = parseInt(dayMatch[1])
-  }
-
-  // 提取小时
-  const hourMatch = runningTime.match(/(\d+)\s*(?:hour|h)/)
-  if (hourMatch) {
-    hours = parseInt(hourMatch[1])
-  }
-
-  // 提取分钟
-  const minMatch = runningTime.match(/(\d+)\s*(?:minute|min|m)/)
-  if (minMatch) {
-    minutes = parseInt(minMatch[1])
-  }
-
-  // 构建中文输出
-  let result = ''
-  if (days > 0) {
-    result += `${days}天 `
-  }
-  if (hours > 0) {
-    result += `${hours}小时 `
-  }
-  if (minutes > 0 || (days === 0 && hours === 0)) {
-    result += `${minutes}分钟`
-  }
-
-  return result.trim()
-}
 
 // 自动更新状态徽标（上次自动更新结果，显示在运行时间后面）
 function AutoUpdateBadge({ info }) {
@@ -1418,53 +1375,38 @@ export function Containers() {
                           </span>
                         )}
                         <div className="flex-shrink-0">
-                          {(() => {
-                            let iconUrl = container.iconUrl;
-                            if (!iconUrl && container.usingImage) {
-                              const builtInLogo = getImageLogo(container.usingImage);
-                              if (builtInLogo) {
-                                iconUrl = builtInLogo;
-                              } else {
-                                const imageLogos = customIcons;
-                                for (const [imageName, logoUrl] of Object.entries(imageLogos)) {
-                                  if (container.usingImage.startsWith(imageName) ||
-                                    container.usingImage.includes(`${imageName}:`)) {
-                                    iconUrl = logoUrl;
-                                    break;
-                                  }
-                                }
-                              }
-                            }
-                            if (iconUrl) {
-                              return (
-                                <img
-                                  src={iconUrl}
-                                  alt={container.name}
-                                  className="h-10 w-10 rounded-lg object-cover shadow-sm flex-shrink-0"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.parentElement.innerHTML = `
-                                    <div class="h-10 w-10 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-sm">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-white">
-                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
-                                      </svg>
-                                    </div>
-                                  `;
-                                  }}
-                                />
-                              );
-                            } else {
-                              return (
-                                <div className="h-10 w-10 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-sm flex-shrink-0">
-                                  <Package className="h-5 w-5 text-white" />
-                                </div>
-                              );
-                            }
-                          })()}
+                          <ContainerLogo container={container} customIcons={customIcons} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">{container.name}</div>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{container.name}</span>
+                            {container.isSelf && (
+                              <span
+                                className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 font-medium"
+                                title="这是 DockHamster 面板自身容器"
+                              >
+                                本面板
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">{container.usingImage}</div>
+                          {/* 快捷导航：容器 Web 端口直达 */}
+                          {isRunning && Array.isArray(container.ports) && container.ports.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
+                              {container.ports.map((p) => (
+                                <a
+                                  key={p}
+                                  href={containerWebUrl(p)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 text-[11px] font-medium hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                                  title={`打开 ${containerWebUrl(p)}`}
+                                >
+                                  {p}<ExternalLink className="h-2.5 w-2.5" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1571,7 +1513,7 @@ export function Containers() {
                                   ? "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"
                                   : "text-purple-600 dark:text-purple-400 border-gray-200 dark:border-gray-700 hover:border-purple-200 dark:hover:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20"
                               )}
-                              title="更新"
+                              title={container.isSelf ? '更新面板自身（接力容器方式，面板会短暂重启、失败自动回滚）' : '更新'}
                             >
                               <Upload className="h-3.5 w-3.5" />更新
                             </button>

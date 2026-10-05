@@ -149,6 +149,25 @@ export const progressAPI = {
   getProgress: (taskid) => apiClient.get(`/api/progress/${taskid}`),
 }
 
+// 容器 Web 界面 favicon 解析（概览页快捷导航用）
+export const faviconAPI = {
+  resolve: (url) => apiClient.get('/api/favicon/resolve', { params: { url }, timeout: 8000 }),
+}
+
+// 面板自更新（接力容器方式）
+export const selfUpdateAPI = {
+  status: () => apiClient.get('/api/selfUpdate/status'),
+  run: () => apiClient.post('/api/selfUpdate/run'),
+}
+
+// 镜像加速源（测速 / 加速拉取）
+export const acceleratorAPI = {
+  getSettings: () => apiClient.get('/api/accelerator/settings'),
+  saveSettings: (settings) => apiClient.post('/api/accelerator/settings', settings),
+  test: (sources) => apiClient.post('/api/accelerator/test', { sources: sources || [] }, { timeout: 30000 }),
+  pull: (source, image) => apiClient.post('/api/accelerator/pull', { source, image }),
+}
+
 // 自动更新相关API
 export const autoUpdateAPI = {
   getSettings: () => apiClient.get('/api/autoUpdate/settings'),

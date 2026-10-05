@@ -598,6 +598,17 @@ export function AutoUpdate() {
               />
               <span className="text-sm text-gray-700 dark:text-gray-300">出现失败时发送告警</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!settings.watchdogDisabled}
+                onChange={(e) => patch('watchdogDisabled', !e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="容器意外退出 / 被 OOM 杀掉 / 反复重启时推送；面板主动的停止重启不会误报">
+                容器异常告警（退出 / OOM / 重启循环）
+              </span>
+            </label>
             <span className="text-xs text-gray-400 dark:text-gray-500 self-center">渠道勾选后按上面的规则发送；改完点右上角「保存设置」生效</span>
           </div>
 

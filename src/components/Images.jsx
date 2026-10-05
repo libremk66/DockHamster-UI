@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search, History, ShieldCheck } from 'lucide-react'
+import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search, History, ShieldCheck, Zap } from 'lucide-react'
 import { imageAPI, autoUpdateAPI, containerAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 import { CheckUpdateButton } from './CheckUpdateButton.jsx'
+import { AcceleratorPanel, AcceleratorPullModal } from './Accelerator.jsx'
 import { getImageLogo } from '../config/imageLogos.js'
+
+// 是否是 Docker Hub 镜像（无 registry 前缀；加速拉取仅支持这类）
+function isDockerHubImage(name) {
+  if (!name || name === 'None' || name === '<none>') return false
+  if (name.startsWith('dh-snap/')) return false // 本地快照命名空间
+  const first = name.split('/')[0]
+  return !first.includes('.') && !first.includes(':') && first !== 'localhost'
+}
 
 // 安全的图片组件
 function SafeImage({ src, alt, className, fallback }) {
@@ -38,6 +47,9 @@ export function Images() {
   const [snapshots, setSnapshots] = useState([])
   const [containers, setContainers] = useState([])
   const [rollbackTarget, setRollbackTarget] = useState(null)
+  // 加速源面板 / 加速拉取
+  const [accelPanelOpen, setAccelPanelOpen] = useState(false)
+  const [pullModal, setPullModal] = useState({ isOpen: false, image: null })
   const [checkingUpdates, setCheckingUpdates] = useState(false) // {containerName, ref, candidates}
 
   // 获取自定义图标配置
@@ -279,7 +291,15 @@ export function Images() {
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">镜像管理</h2>
             <p className="text-gray-600 dark:text-gray-400 mt-1">查看和管理Docker镜像</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setAccelPanelOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200 rounded-lg hover:bg-sky-200 dark:hover:bg-sky-800 transition-colors text-sm font-medium"
+              title="管理镜像加速源 / 测速"
+            >
+              <Zap className="h-4 w-4" />
+              <span>加速源</span>
+            </button>
             <button
               onClick={() => {
                 const imagesToDelete = images.filter(img => img.tag === 'None' || img.tag === '<none>')
@@ -637,7 +657,7 @@ export function Images() {
               return (
                 <div
                   key={image.id}
-                  className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_130px_170px_220px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors"
+                  className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_130px_170px_260px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors"
                 >
                   {/* ① 镜像 */}
                   <div className="flex items-center gap-3 min-w-0">
@@ -682,6 +702,15 @@ export function Images() {
 
                   {/* ⑤ 操作 */}
                   <div className="flex gap-1.5 justify-end items-center">
+                    {!dangling && isDockerHubImage(image.name) && (
+                      <button
+                        onClick={() => setPullModal({ isOpen: true, image })}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-amber-600 dark:text-amber-400 border-gray-200 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        title="通过加速源重新拉取（更新此镜像）"
+                      >
+                        <Zap className="h-3.5 w-3.5" />加速拉取
+                      </button>
+                    )}
                     <a
                       href={`https://hub.docker.com/r/${image.name}`}
                       target="_blank"
@@ -939,6 +968,17 @@ export function Images() {
           </div>
         </div>
       )}
+
+      {/* 加速源管理面板 */}
+      <AcceleratorPanel isOpen={accelPanelOpen} onClose={() => setAccelPanelOpen(false)} />
+
+      {/* 加速拉取弹窗 */}
+      <AcceleratorPullModal
+        isOpen={pullModal.isOpen}
+        image={pullModal.image}
+        onClose={() => setPullModal({ isOpen: false, image: null })}
+        onDone={fetchImages}
+      />
     </div>
   )
 }
