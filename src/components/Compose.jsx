@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Layers, RefreshCw, ChevronDown, ChevronUp, ExternalLink, FileText, X } from 'lucide-react'
+import { Layers, RefreshCw, ChevronDown, ChevronUp, FileText, ScrollText, X } from 'lucide-react'
 import { containerAPI } from '../api/client'
 
 // Compose 页面：按项目分组展示 compose 管理的容器，支持查看 compose 文件原文
@@ -9,6 +9,9 @@ export function Compose() {
   const [fileViewer, setFileViewer] = useState(null) // { containerId, name }
   const [fileContent, setFileContent] = useState(null)
   const [fileLoading, setFileLoading] = useState(false)
+  const [logsViewer, setLogsViewer] = useState(null) // { containerId, name }
+  const [logsContent, setLogsContent] = useState(null)
+  const [logsLoading, setLogsLoading] = useState(false)
 
   const { data: containers = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['containers'],
@@ -47,6 +50,20 @@ export function Compose() {
       setFileContent({ files: {}, error: error.message })
     } finally {
       setFileLoading(false)
+    }
+  }
+
+  const openLogs = async (container) => {
+    setLogsViewer({ containerId: container.id, name: container.name })
+    setLogsContent(null)
+    setLogsLoading(true)
+    try {
+      const response = await containerAPI.getContainerLogs(container.id)
+      setLogsContent(typeof response.data === 'string' ? response.data : (response.data?.msg || '读取失败'))
+    } catch (error) {
+      setLogsContent('读取日志失败: ' + (error.response?.data || error.message))
+    } finally {
+      setLogsLoading(false)
     }
   }
 
@@ -140,16 +157,22 @@ export function Compose() {
                         <span className="text-xs text-gray-400 flex-shrink-0">
                           {svc.status === 'running' ? '运行中' : '已停止'}
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openFile(svc)
-                          }}
-                          className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
-                          title="查看 compose 文件原文"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => openFile(svc)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                            title="查看 compose 文件原文"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => openLogs(svc)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
+                            title="查看日志（最近 200 行）"
+                          >
+                            <ScrollText className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -203,6 +226,54 @@ export function Compose() {
                   ))}
                 </div>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 容器日志弹窗 */}
+      {logsViewer && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setLogsViewer(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white">
+                  容器日志 · {logsViewer.name}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">最近 200 行</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const svc = { id: logsViewer.containerId, name: logsViewer.name }
+                    openLogs(svc)
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  title="刷新日志"
+                >
+                  <RefreshCw className={`h-4 w-4 ${logsLoading ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setLogsViewer(null)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden p-4">
+              {logsLoading ? (
+                <div className="text-center py-10 text-gray-400 text-sm">加载中…</div>
+              ) : (
+                <pre className="h-full overflow-auto px-4 py-3 bg-gray-900 text-gray-100 text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
+                  {logsContent || '（无日志）'}
+                </pre>
+              )}
             </div>
           </div>
         </div>
