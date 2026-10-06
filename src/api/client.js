@@ -107,11 +107,12 @@ export const containerAPI = {
   renameContainer: (id, newName) => {
     return apiClient.post(`/api/container/${id}/rename?newName=${encodeURIComponent(newName)}`)
   },
-  updateContainer: (id, containerName, imageNameAndTag, delOldContainer) => {
+  updateContainer: (id, containerName, imageNameAndTag, delOldContainer, skipPull = false) => {
     const formData = new FormData()
     formData.append('containerName', containerName)
     formData.append('imageNameAndTag', imageNameAndTag)
     formData.append('delOldContainer', delOldContainer ? 'true' : 'false')
+    formData.append('skipPull', skipPull ? 'true' : 'false')
     return apiClient.post(`/api/container/${id}/update`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })

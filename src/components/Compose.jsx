@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Layers, RefreshCw, ChevronDown, ChevronUp, FileText, ScrollText, X } from 'lucide-react'
-import { containerAPI } from '../api/client'
+import { Layers, RefreshCw, ChevronDown, ChevronUp, FileText, ScrollText, Upload, RotateCw, X } from 'lucide-react'
+import { containerAPI, progressAPI } from '../api/client'
 
 // Compose 页面：按项目分组展示 compose 管理的容器，支持查看 compose 文件原文与容器日志
 export function Compose() {
@@ -12,6 +12,8 @@ export function Compose() {
   const [logsViewer, setLogsViewer] = useState(null)
   const [logsContent, setLogsContent] = useState(null)
   const [logsLoading, setLogsLoading] = useState(false)
+  // 容器 ID -> 进行中/最近一次操作的进度
+  const [tasks, setTasks] = useState({})
 
   const { data: containers = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['containers'],
@@ -59,6 +61,64 @@ export function Compose() {
     }
   }
 
+  // runAction 触发单个服务的更新（拉镜像+重建）或重建（跳过拉取，仅按 compose 配置）
+  const runAction = async (svc, skipPull) => {
+    const actionLabel = skipPull ? '重建' : '更新'
+    const setTask = (patch) => setTasks((t) => ({ ...t, [svc.id]: { ...t[svc.id], ...patch } }))
+    setTask({ percentage: 0, message: actionLabel + '请求已提交', isDone: false, failed: false })
+    try {
+      const response = await containerAPI.updateContainer(svc.id, svc.name, svc.usingImage, true, skipPull)
+      if (response.data.code === 200 || response.data.code === 0) {
+        const taskID = response.data.data?.taskID
+        if (taskID) {
+          setTask({ taskID, percentage: 0, message: actionLabel + '中…' })
+        } else {
+          setTask({ percentage: 100, message: actionLabel + '完成', isDone: true })
+        }
+      } else {
+        setTask({ percentage: 100, message: response.data.msg || actionLabel + '失败', isDone: true, failed: true })
+      }
+    } catch (error) {
+      setTask({ percentage: 100, message: actionLabel + '请求失败: ' + error.message, isDone: true, failed: true })
+    }
+  }
+
+  // 轮询进行中的任务进度；任务结束时刷新容器列表
+  const hasActiveTask = Object.values(tasks).some((t) => t.taskID && !t.isDone)
+  const tasksRef = useRef(tasks)
+  useEffect(() => { tasksRef.current = tasks }, [tasks])
+  useEffect(() => {
+    if (!hasActiveTask) return
+    const timer = setInterval(() => {
+      const active = Object.entries(tasksRef.current).filter(([, t]) => t.taskID && !t.isDone)
+      for (const [id, t] of active) {
+        progressAPI.getProgress(t.taskID)
+          .then((res) => {
+            const p = res.data.data
+            if (!p) return
+            const done = !!p.isDone
+            setTasks((cur) => {
+              const old = cur[id]
+              if (!old || old.isDone) return cur
+              return {
+                ...cur,
+                [id]: {
+                  ...old,
+                  percentage: p.percentage,
+                  message: p.message || p.detailMsg || old.message,
+                  isDone: done,
+                  failed: done && /失败/.test((p.message || '') + (p.detailMsg || '')),
+                },
+              }
+            })
+            if (done) refetch()
+          })
+          .catch(() => { /* 单次轮询失败忽略，下一轮重试 */ })
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [hasActiveTask])
+
   const totalServices = projectList.reduce((n, p) => n + p.services.length, 0)
 
   return (
@@ -101,6 +161,14 @@ export function Compose() {
               onToggle={() => setExpandedProject(expandedProject === project.name ? null : project.name)}
               onViewFile={openFile}
               onViewLogs={openLogs}
+              tasks={tasks}
+              onUpdate={(svc) => runAction(svc, false)}
+              onRebuild={(svc) => runAction(svc, true)}
+              onDismissTask={(id) => setTasks((t) => {
+                const next = { ...t }
+                delete next[id]
+                return next
+              })}
             />
           ))}
         </div>
@@ -141,8 +209,8 @@ function groupByProject(containers) {
   return Object.values(projects).sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// ProjectCard 单个 compose 项目卡片：头部信息 + 服务列表
-function ProjectCard({ project, expanded, onToggle, onViewFile, onViewLogs }) {
+// ProjectCard 单个 compose 项目卡片：头部信息 + 服务列表（含更新/重建/日志与内联进度）
+function ProjectCard({ project, expanded, onToggle, onViewFile, onViewLogs, tasks, onUpdate, onRebuild, onDismissTask }) {
   const runningCount = project.services.filter((s) => s.status === 'running').length
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
@@ -184,28 +252,84 @@ function ProjectCard({ project, expanded, onToggle, onViewFile, onViewLogs }) {
       {expanded && (
         <div className="border-t border-gray-100 dark:border-gray-700/60 divide-y divide-gray-100 dark:divide-gray-700/60">
           {project.services.map((svc) => (
-            <div key={svc.id} className="flex items-center gap-3 px-4 sm:px-5 py-3">
-              <span
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${svc.status === 'running' ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{svc.name}</div>
-                <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate">{svc.usingImage}</div>
-              </div>
-              <span className="text-xs text-gray-400 flex-shrink-0">
-                {svc.status === 'running' ? '运行中' : '已停止'}
-              </span>
-              <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => onViewLogs(svc)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
-                  title="查看日志（最近 200 行）"
-                >
-                  <ScrollText className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            <ServiceRow
+              key={svc.id}
+              svc={svc}
+              task={tasks[svc.id]}
+              onViewLogs={onViewLogs}
+              onUpdate={onUpdate}
+              onRebuild={onRebuild}
+              onDismissTask={onDismissTask}
+            />
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ServiceRow 单个服务行：状态 + 更新/重建/日志按钮 + 内联进度
+function ServiceRow({ svc, task, onViewLogs, onUpdate, onRebuild, onDismissTask }) {
+  const running = svc.status === 'running'
+  const busy = task && !task.isDone
+  const actionBtn = 'p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+  return (
+    <div className="px-4 sm:px-5 py-3">
+      <div className="flex items-center gap-3">
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${running ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{svc.name}</div>
+          <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate">{svc.usingImage}</div>
+        </div>
+        <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:inline">
+          {running ? '运行中' : '已停止'}
+        </span>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => onUpdate(svc)}
+            disabled={busy}
+            className={`${actionBtn} text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30`}
+            title="更新（拉取新镜像并重建该服务）"
+          >
+            <Upload className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onRebuild(svc)}
+            disabled={busy}
+            className={`${actionBtn} text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30`}
+            title="重建（不拉镜像，仅按 compose 配置强制重建）"
+          >
+            <RotateCw className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onViewLogs(svc)}
+            className={`${actionBtn} text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30`}
+            title="查看日志（最近 200 行）"
+          >
+            <ScrollText className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      {task && (
+        <div className="mt-2 flex items-center gap-2">
+          <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${task.failed ? 'bg-red-500' : task.isDone ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+              style={{ width: `${task.percentage || 0}%` }}
+            />
+          </div>
+          <span className={`text-xs truncate max-w-[60%] ${task.failed ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+            {task.message}
+          </span>
+          {task.isDone && (
+            <button
+              onClick={() => onDismissTask(svc.id)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+              title="关闭"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
     </div>
