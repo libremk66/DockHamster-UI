@@ -86,6 +86,19 @@ const NOTIFY_GROUPS = [
         ]
       },
       {
+        type: 'qq', name: 'QQ（官方机器人）', fields: [
+          { key: 'appId', label: 'AppID（QQ 开放平台 → 机器人）', placeholder: '10xxxxxxx' },
+          { key: 'appSecret', label: 'ClientSecret（机器人密钥）', placeholder: '' },
+          { key: 'receiveId', label: '接收目标 ID（⚠️ QQ 主动消息每月限 4 条/群、4 条/用户，目标需先与机器人交互过）', placeholder: '群 group_openid 或 用户 openid' },
+          {
+            key: 'receiveIdType', label: '目标类型', type: 'select', options: [
+              { value: 'group', label: '群聊（group_openid）' },
+              { value: 'user', label: '单聊（用户 openid）' },
+            ]
+          },
+        ]
+      },
+      {
         type: 'dingtalk', name: '钉钉', fields: [
           { key: 'webhook', label: 'Webhook 地址', placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...' },
           { key: 'secret', label: '加签密钥（可选）', placeholder: '' },
