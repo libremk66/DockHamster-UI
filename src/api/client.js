@@ -176,6 +176,8 @@ export const autoUpdateAPI = {
   checkNow: () => apiClient.post('/api/autoUpdate/check', {}, { timeout: 30000 }),
   checkStatus: () => apiClient.get('/api/autoUpdate/check/status'),
   getStatus: () => apiClient.get('/api/autoUpdate/status'),
+  // 「任务」页：全部任务（进行中 + 保留期内的已完成/失败）
+  tasks: () => apiClient.get('/api/tasks'),
   testNotify: (channel, config) => apiClient.post('/api/autoUpdate/testNotify', { channel, config: config || {} }),
   updateGroup: (containerId) => apiClient.post(`/api/container/${containerId}/updateGroup`),
   // 镜像快照（旧镜像回滚）

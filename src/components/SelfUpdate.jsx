@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle, RefreshCw, RotateCw } from 'lucide-react'
 import { selfUpdateAPI, progressAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
 import { cn } from '../utils/cn.js'
+import { gotoTaskCenter } from '../utils/nav.js'
 
 // 面板自更新：一键触发接力更新 → 展示进度 → 等待面板重启恢复 → 展示结果
 export function SelfUpdateSection() {
@@ -116,6 +117,7 @@ export function SelfUpdateSection() {
       <div className="space-y-2">
         <ProgressBar percent={progress?.percentage || 0} message={progress?.message} showPercent />
         <div className="text-[11px] text-gray-400 dark:text-gray-500">更新过程中面板会短暂重启，请不要关闭页面。</div>
+        <button className="text-xs text-primary-600 dark:text-primary-400 hover:underline" onClick={gotoTaskCenter}>全部任务 ↗</button>
       </div>
     )
   }

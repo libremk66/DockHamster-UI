@@ -8,7 +8,8 @@ import {
   Info,
   Github,
   ArrowUpCircle,
-  RefreshCw
+  RefreshCw,
+  ListChecks
 } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle.jsx'
 import { SelfUpdateSection } from './SelfUpdate.jsx'
@@ -79,6 +80,11 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       id: '#autoupdate',
       label: '自动更新',
       icon: RefreshCw,
+    },
+    {
+      id: '#tasks',
+      label: '任务',
+      icon: ListChecks,
     },
     {
       id: '#images',
@@ -408,6 +414,11 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       id: '#autoupdate',
       label: '自动更新',
       icon: RefreshCw,
+    },
+    {
+      id: '#tasks',
+      label: '任务',
+      icon: ListChecks,
     },
     {
       id: '#images',

@@ -3,6 +3,7 @@ import { Auth } from './components/Auth.jsx'
 import { Sidebar, MobileBottomNav } from './components/Header.jsx'
 import { Containers } from './components/Containers.jsx'
 import { AutoUpdate } from './components/AutoUpdate.jsx'
+import { Tasks } from './components/Tasks.jsx'
 import { Images } from './components/Images.jsx'
 import { Backups } from './components/Backups.jsx'
 import { Migrate } from './components/Migrate.jsx'
@@ -107,6 +108,16 @@ function AppContent() {
     }
   }, [])
 
+  // 跨页跳转：其它页面的「全部任务 ↗」通过 dh:navigate 事件切到任务页
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const tab = e?.detail?.tab
+      if (tab) setActiveTab(tab)
+    }
+    window.addEventListener('dh:navigate', onNavigate)
+    return () => window.removeEventListener('dh:navigate', onNavigate)
+  }, [])
+
   const handleLogin = () => {
     setIsAuthenticated(true)
     // 触发自定义事件通知其他组件认证状态已更新
@@ -137,6 +148,8 @@ function AppContent() {
         return <Containers />
       case '#autoupdate':
         return <AutoUpdate />
+      case '#tasks':
+        return <Tasks />
       case '#images':
         return <Images />
       case '#icons':

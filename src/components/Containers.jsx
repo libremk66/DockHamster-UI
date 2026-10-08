@@ -25,6 +25,7 @@ import { formatRunningTime } from '../utils/format.js'
 import { containerWebUrl } from '../utils/webFavicon.js'
 import { ContainerLogo } from './ContainerLogo.jsx'
 import icons8Img from '../assets/icons8.png'
+import { gotoTaskCenter } from '../utils/nav.js'
 
 
 // 自动更新状态徽标（上次自动更新结果，显示在运行时间后面）
@@ -1526,6 +1527,7 @@ export function Containers() {
                     {act?.loading && act.action === 'update' && (
                       <div className="px-4 pb-3 -mt-1 lg:pl-[74px]">
                         <ProgressBar percent={act.percentage || 0} message={act.progress} detail={act.detail} showPercent />
+                        <button className="mt-1 text-xs text-primary-600 dark:text-primary-400 hover:underline" onClick={gotoTaskCenter}>全部任务 ↗</button>
                       </div>
                     )}
                   </div>

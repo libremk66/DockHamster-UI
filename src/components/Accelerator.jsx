@@ -3,6 +3,7 @@ import { ArrowDown, Gauge, Plus, Trash2, X, Zap } from 'lucide-react'
 import { acceleratorAPI, progressAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
 import { cn } from '../utils/cn.js'
+import { gotoTaskCenter } from '../utils/nav.js'
 
 // 延迟徽标配色：越快越绿
 function latencyClass(ms) {
@@ -327,6 +328,7 @@ export function AcceleratorPullModal({ isOpen, onClose, image, onDone }) {
               {progress.detailMsg && (
                 <div className="mt-2 text-[11px] font-mono text-gray-400 dark:text-gray-500 whitespace-pre-wrap max-h-32 overflow-y-auto break-all">{progress.detailMsg}</div>
               )}
+              <button className="mt-1 text-xs text-primary-600 dark:text-primary-400 hover:underline" onClick={gotoTaskCenter}>全部任务 ↗</button>
             </div>
           )}
 

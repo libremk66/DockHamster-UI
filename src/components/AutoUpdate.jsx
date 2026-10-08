@@ -17,6 +17,7 @@ import { autoUpdateAPI, containerAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
 import { CheckUpdateButton } from './CheckUpdateButton.jsx'
 import { cn } from '../utils/cn.js'
+import { gotoTaskCenter } from '../utils/nav.js'
 
 // 简易开关组件
 function Switch({ checked, onChange, disabled = false }) {
@@ -517,6 +518,7 @@ export function AutoUpdate() {
               进行中（{activeTasks.filter(t => t.isDone && !t.failed).length}/{activeTasks.length} 完成
               {activeTasks.some(t => t.failed) && <span className="text-red-500">，{activeTasks.filter(t => t.failed).length} 失败</span>}）
             </h3>
+            <button className="ml-auto text-xs text-primary-600 dark:text-primary-400 hover:underline" onClick={gotoTaskCenter}>全部任务 ↗</button>
           </div>
           <div className="px-5 py-3 space-y-3">
             {activeTasks.map((t, idx) => {

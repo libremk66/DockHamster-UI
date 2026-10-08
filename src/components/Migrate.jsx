@@ -6,6 +6,7 @@ import {
 import { autoUpdateAPI, containerAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
 import { cn } from '../utils/cn.js'
+import { gotoTaskCenter } from '../utils/nav.js'
 
 const okCode = (r) => r?.data?.code === 200 || r?.data?.code === 0
 const fmtSize = (n) => {
@@ -593,6 +594,7 @@ export function Migrate() {
               {importTask && (
                 <div className="mt-3">
                   <ProgressBar percent={importTask.percentage} message={importTask.message} detail={importTask.detail} done={importTask.isDone} />
+                  <button className="mt-1 text-xs text-primary-600 dark:text-primary-400 hover:underline" onClick={gotoTaskCenter}>全部任务 ↗</button>
                 </div>
               )}
               {results && (
