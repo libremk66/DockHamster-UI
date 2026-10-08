@@ -82,7 +82,11 @@ const NOTIFY_GROUPS = [
       },
       {
         type: 'wecom', name: '企业微信', fields: [
-          { key: 'webhook', label: 'Webhook 地址', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...' },
+          { key: 'appId', label: 'CorpID（企业 ID，应用模式；填了走应用消息，可推个人微信）', placeholder: 'wwxxxxxxxxxxxxxxxx' },
+          { key: 'appSecret', label: '应用 Secret（应用模式）', placeholder: '' },
+          { key: 'agentId', label: 'AgentID（应用 ID，应用模式必填）', placeholder: '1000002' },
+          { key: 'receiveId', label: '接收成员（可选，默认 @all）', placeholder: '企业微信账号，多个用 | 分隔，如 zhangsan|lisi' },
+          { key: 'webhook', label: '或：群机器人 Webhook（与上面二选一）', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...' },
         ]
       },
       {
