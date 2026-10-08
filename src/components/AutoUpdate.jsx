@@ -64,8 +64,20 @@ const NOTIFY_GROUPS = [
     label: '群机器人', channels: [
       {
         type: 'feishu', name: '飞书', fields: [
-          { key: 'webhook', label: 'Webhook 地址', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...' },
-          { key: 'secret', label: '签名密钥（可选，机器人开了签名校验才需要）', placeholder: '' },
+          { key: 'appId', label: 'App ID（应用模式；填了走自建应用，消息为卡片）', placeholder: 'cli_xxxxxxxxxxxxxxxx' },
+          { key: 'appSecret', label: 'App Secret（应用模式）', placeholder: '' },
+          { key: 'receiveId', label: '接收者 ID（应用模式必填）', placeholder: 'open_id / user_id / email / 群 chat_id' },
+          {
+            key: 'receiveIdType', label: '接收者类型', type: 'select', options: [
+              { value: 'open_id', label: 'open_id（用户，推荐）' },
+              { value: 'user_id', label: 'user_id（用户）' },
+              { value: 'email', label: 'email（邮箱）' },
+              { value: 'chat_id', label: 'chat_id（群聊）' },
+            ]
+          },
+          { key: 'domain', label: '开放平台域名（可选，Lark 国际版填 https://open.larksuite.com）', placeholder: '' },
+          { key: 'webhook', label: '或：群机器人 Webhook（与上面二选一）', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...' },
+          { key: 'secret', label: '群机器人签名密钥（可选，开了签名校验才需要）', placeholder: '' },
         ]
       },
       {
@@ -712,8 +724,9 @@ export function AutoUpdate() {
                                   onChange={(e) => updateChannel(chDef.type, { [f.key]: e.target.value })}
                                   className={cn(NOTIFY_INPUT_CLS, "text-xs")}
                                 >
-                                  <option value="">POST（默认）</option>
-                                  <option value="GET">GET</option>
+                                  {(f.options || [{ value: '', label: 'POST（默认）' }, { value: 'GET', label: 'GET' }]).map(o => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
                                 </select>
                               ) : f.textarea ? (
                                 <textarea
