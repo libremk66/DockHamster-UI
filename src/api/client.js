@@ -116,14 +116,6 @@ export const containerAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  backupContainer: () => apiClient.get('/api/container/backup'),
-  listBackups: () => apiClient.get('/api/container/listBackups'),
-  restoreContainer: (filename) => {
-    // 后端路由是 POST /api/container/backups/restore，文件名在 JSON body 里
-    return apiClient.post('/api/container/backups/restore', { filename })
-  },
-  deleteBackup: (filename) => apiClient.delete(`/api/container/backups?filename=${encodeURIComponent(filename)}`),
-  backupToCompose: () => apiClient.get('/api/container/backup2compose'),
 }
 
 // 镜像相关API

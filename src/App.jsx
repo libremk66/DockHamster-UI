@@ -5,7 +5,6 @@ import { Containers } from './components/Containers.jsx'
 import { AutoUpdate } from './components/AutoUpdate.jsx'
 import { Tasks } from './components/Tasks.jsx'
 import { Images } from './components/Images.jsx'
-import { Backups } from './components/Backups.jsx'
 import { Migrate } from './components/Migrate.jsx'
 import { Icons } from './components/Icons.jsx'
 import { About } from './components/About.jsx'
@@ -154,8 +153,6 @@ function AppContent() {
         return <Images />
       case '#icons':
         return <Icons />
-      case '#backups':
-        return <Backups />
         case '#migrate':
           return <Migrate />
       case '#about':

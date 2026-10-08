@@ -5,10 +5,10 @@ import { cn } from '../utils/cn.js'
 import { autoUpdateAPI } from '../api/client.js'
 
 // 任务类型与触发来源的中文标签（后端 kind/source 字段）
-const KIND_LABEL = { update: '更新', pull: '拉取', selfupdate: '面板自更新', migrate: '迁移导入', restore: '还原' }
+const KIND_LABEL = { update: '更新', pull: '拉取', selfupdate: '面板自更新', migrate: '迁移导入' }
 const SOURCE_LABEL = {
   container: '容器页', autoupdate: '自动更新', group: '整组更新',
-  accelerator: '加速源', selfupdate: '面板自更新', migrate: '迁移', rollback: '快照回滚', backup: '备份页',
+  accelerator: '加速源', selfupdate: '面板自更新', migrate: '迁移', rollback: '快照回滚',
 }
 
 function KindBadge({ kind, source }) {

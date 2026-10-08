@@ -3,7 +3,6 @@ import {
   Box,
   LogOut,
   Server,
-  DatabaseBackup,
   Package,
   Info,
   Github,
@@ -90,11 +89,6 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       id: '#images',
       label: '镜像',
       icon: Box,
-    },
-    {
-      id: '#backups',
-      label: '备份',
-      icon: DatabaseBackup,
     },
     {
       id: '#migrate',
@@ -424,11 +418,6 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       id: '#images',
       label: '镜像',
       icon: Box,
-    },
-    {
-      id: '#backups',
-      label: '备份',
-      icon: DatabaseBackup,
     },
     {
       id: '#migrate',
