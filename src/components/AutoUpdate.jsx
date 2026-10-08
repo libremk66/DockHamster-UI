@@ -124,7 +124,9 @@ export function AutoUpdate() {
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [loadErr, setLoadErr] = useState(false)
+  const [loadErr, setLoadErr] = useState('')
+  const [sideWarn, setSideWarn] = useState(false)
+  const [loadKey, setLoadKey] = useState(0)
   const [snapStats, setSnapStats] = useState(null)
 
   const loadSnapStats = useCallback(async () => {
@@ -134,34 +136,52 @@ export function AutoUpdate() {
     } catch (e) { /* 忽略 */ }
   }, [])
 
-  // 首次加载：设置 + 状态 + 容器列表 + 快照统计
+  // 首次加载：关键数据（设置/状态，决定页面能否渲染）先行；
+  // 容器列表与快照统计随后并行、各自容错 —— 更新进行中后端变慢时不再拖垮整页
   useEffect(() => {
     let mounted = true
+    // 注意：官方老接口成功码是 0，新接口是 200，两者都要认
+    const okCode = (r) => r?.data?.code === 200 || r?.data?.code === 0
     ;(async () => {
+      setLoadErr('')
+      // ① 关键数据
       try {
-        const [s, st, c, snap] = await Promise.all([
-          autoUpdateAPI.getSettings(),
-          autoUpdateAPI.getStatus(),
-          containerAPI.getContainers(),
-          autoUpdateAPI.getSnapshots(),
-        ])
+        const [s, st] = await Promise.all([autoUpdateAPI.getSettings(), autoUpdateAPI.getStatus()])
         if (!mounted) return
-        // 注意：官方老接口成功码是 0，新接口是 200，两者都要认
-        const okCode = (r) => r.data.code === 200 || r.data.code === 0
         if (okCode(s)) {
           setSettings(s.data.data)
           setExcludeText((s.data.data.exclude || []).join(', '))
+        } else {
+          setLoadErr(s?.data?.msg || '后端返回异常')
         }
         if (okCode(st)) setStatus(st.data.data)
-        if (okCode(c)) setContainers(c.data.data || [])
-        if (okCode(snap)) setSnapStats(snap.data.data)
       } catch (e) {
         console.error('加载自动更新数据失败:', e)
-        if (mounted) setLoadErr(true)
+        if (mounted) {
+          const code = e?.response?.status
+          const timedOut = e?.code === 'ECONNABORTED' || /timeout/i.test(e?.message || '')
+          setLoadErr(
+            code === 404 ? '__NO_API__'
+              : timedOut ? '请求超时（后端繁忙或网络较慢）'
+                : (e?.response?.data?.msg || e?.message || '网络错误')
+          )
+        }
+        return
+      }
+      // ② 非关键数据：慢或失败都不阻塞页面主体
+      try {
+        const [c, snap] = await Promise.all([containerAPI.getContainers(), autoUpdateAPI.getSnapshots()])
+        if (!mounted) return
+        if (okCode(c)) setContainers(c.data.data || [])
+        if (okCode(snap)) setSnapStats(snap.data.data)
+        setSideWarn(!okCode(c) || !okCode(snap))
+      } catch (e) {
+        console.warn('容器列表/快照统计加载失败（不影响页面）:', e)
+        if (mounted) setSideWarn(true)
       }
     })()
     return () => { mounted = false }
-  }, [])
+  }, [loadKey])
 
   // 状态刷新：运行中 2 秒一次（实时进度），空闲 10 秒一次
   // refreshKey 变化时立即重新拉取（点「立即运行」后马上看到进行中面板）
@@ -294,13 +314,22 @@ export function AutoUpdate() {
   }
 
   if (loadErr && !settings) {
+    const noApi = loadErr === '__NO_API__'
     return (
       <div className="p-6 pt-4">
         <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-5 py-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-700 dark:text-amber-300">
-            <p className="font-medium">后端未提供「自动更新」接口</p>
-            <p className="mt-1 text-amber-600 dark:text-amber-400">该功能需要 DockHamster 后端。</p>
+            <p className="font-medium">{noApi ? '后端未提供「自动更新」接口' : '自动更新数据加载失败'}</p>
+            <p className="mt-1 text-amber-600 dark:text-amber-400">
+              {noApi ? '该功能需要 DockHamster 后端。' : loadErr}
+            </p>
+            <button
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 underline underline-offset-2"
+              onClick={() => setLoadKey((k) => k + 1)}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> 重试
+            </button>
           </div>
         </div>
       </div>
@@ -356,6 +385,13 @@ export function AutoUpdate() {
         )}>
           {msg.type === 'ok' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
           {msg.text}
+        </div>
+      )}
+
+      {sideWarn && (
+        <div className="rounded-lg px-4 py-2.5 text-sm flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          容器列表 / 快照统计没能加载（不影响下面的自动更新设置与运行记录），稍后重新进入本页即可。
         </div>
       )}
 
@@ -478,21 +514,32 @@ export function AutoUpdate() {
           <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700/60 flex items-center gap-2">
             <RefreshCw className="h-4 w-4 text-primary-500 dark:text-primary-400 animate-spin" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-              进行中（{activeTasks.filter(t => t.isDone).length}/{activeTasks.length} 完成）
+              进行中（{activeTasks.filter(t => t.isDone && !t.failed).length}/{activeTasks.length} 完成
+              {activeTasks.some(t => t.failed) && <span className="text-red-500">，{activeTasks.filter(t => t.failed).length} 失败</span>}）
             </h3>
           </div>
           <div className="px-5 py-3 space-y-3">
-            {activeTasks.map(t => (
-              <div key={t.taskID}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</span>
-                  {t.isDone
-                    ? <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" />完成</span>
-                    : <span className="text-xs text-gray-400 dark:text-gray-500">{t.percentage || 0}%</span>}
+            {activeTasks.map((t, idx) => {
+              // 还没轮到的行给出排队语境（之前只写"等待中"，看不出前面还有几台）
+              const pendingBefore = activeTasks.slice(0, idx).filter(x => !x.isDone && !x.failed).length
+              const waiting = !t.isDone && !t.failed && t.message === '等待中'
+              const message = waiting
+                ? (pendingBefore > 0 ? `排队中（前面还有 ${pendingBefore} 台）` : '即将开始')
+                : t.message
+              return (
+                <div key={t.taskID}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</span>
+                    {t.failed
+                      ? <span className="text-xs text-red-500 flex items-center gap-1"><XCircle className="h-3.5 w-3.5" />失败</span>
+                      : t.isDone
+                        ? <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" />完成</span>
+                        : <span className="text-xs text-gray-400 dark:text-gray-500">{t.percentage || 0}%</span>}
+                  </div>
+                  <ProgressBar percent={t.percentage} message={message} detail={t.detailMsg} done={t.isDone} failed={t.failed} />
                 </div>
-                <ProgressBar percent={t.percentage} message={t.message} detail={t.detailMsg} done={t.isDone} />
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
