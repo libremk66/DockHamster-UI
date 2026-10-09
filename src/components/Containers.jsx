@@ -23,6 +23,27 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getImageLogo } from '../config/imageLogos.js'
 import { formatRunningTime } from '../utils/format.js'
 import { containerWebUrl } from '../utils/webFavicon.js'
+
+// ── 进行中任务的登记表（sessionStorage）：容器页的进度条"切页面就丢"的修复 ──
+// 只记录从本页发起的任务；切换页面/刷新回来后按 taskID 重新接上（后端进度本来就一直在）。
+const INFLIGHT_KEY = 'dh_inflight_tasks'
+function saveInflight(containerId, taskID, action) {
+  try {
+    const m = JSON.parse(sessionStorage.getItem(INFLIGHT_KEY) || '{}')
+    m[containerId] = { taskID, action: action || 'update' }
+    sessionStorage.setItem(INFLIGHT_KEY, JSON.stringify(m))
+  } catch (e) { /* 隐私模式等场景忽略 */ }
+}
+function removeInflight(containerId) {
+  try {
+    const m = JSON.parse(sessionStorage.getItem(INFLIGHT_KEY) || '{}')
+    delete m[containerId]
+    sessionStorage.setItem(INFLIGHT_KEY, JSON.stringify(m))
+  } catch (e) { /* 忽略 */ }
+}
+function loadInflight() {
+  try { return JSON.parse(sessionStorage.getItem(INFLIGHT_KEY) || '{}') } catch (e) { return {} }
+}
 import { ContainerLogo } from './ContainerLogo.jsx'
 import icons8Img from '../assets/icons8.png'
 import { gotoTaskCenter } from '../utils/nav.js'
@@ -49,6 +70,7 @@ export function Containers() {
   const [isBatchMode, setIsBatchMode] = useState(false)
   // 添加操作状态跟踪
   const [containerActions, setContainerActions] = useState({}) // 跟踪每个容器的操作状态
+  const unmountedRef = React.useRef(false) // 组件卸载后停止轮询（避免切页面后旧轮询继续打接口）
   const [updateTasks, setUpdateTasks] = useState({}) // 跟踪更新任务
   // 添加筛选状态
   const [filterStatus, setFilterStatus] = useState(null) // null 表示显示全部
@@ -474,6 +496,7 @@ export function Containers() {
     try {
       const r = await autoUpdateAPI.rollbackSnapshot(container.name, selected)
       if (r.data.code === 200 && r.data.data?.taskID) {
+        saveInflight(container.id, r.data.data.taskID, 'rollback')
         await pollProgress(container.id, r.data.data.taskID)
       } else {
         setContainerActions(prev => {
@@ -523,6 +546,7 @@ export function Containers() {
             [t.id]: { action: 'update', loading: true, progress: '整组更新中...', percentage: 0 }
           }))
           setUpdateTasks(prev => ({ ...prev, [t.id]: t.taskID }))
+          saveInflight(t.id, t.taskID, 'update')
           pollProgress(t.id, t.taskID)
         })
       } else {
@@ -569,6 +593,7 @@ export function Containers() {
           ...prev,
           [containerId]: existingTaskID
         }))
+        saveInflight(containerId, existingTaskID, 'update')
         pollProgress(containerId, existingTaskID)
         return
       }
@@ -593,6 +618,7 @@ export function Containers() {
             ...prev,
             [containerId]: taskID
           }))
+          saveInflight(containerId, taskID, 'update')
 
           pollProgress(containerId, taskID)
         } else {
@@ -667,12 +693,14 @@ export function Containers() {
         delete newState[containerId]
         return newState
       })
+      removeInflight(containerId) // 任务已结束：不再需要恢复
     }
 
     const poll = async () => {
       try {
         attempts++
         const response = await progressAPI.getProgress(taskID)
+        if (unmountedRef.current) { if (pollTimer) clearTimeout(pollTimer); return } // 已切走：停轮询（回来时由恢复逻辑重接）
         console.log(`进度查询[${attempts}/${maxAttempts}]:`, response.data)
 
         const data = response.data
@@ -805,6 +833,35 @@ export function Containers() {
     // 开始轮询
     poll()
   }
+
+  // 挂载时恢复"离开页面时仍在进行"的任务：进度条不再因切页面消失
+  React.useEffect(() => {
+    unmountedRef.current = false
+    const inflight = loadInflight()
+    for (const [containerId, info] of Object.entries(inflight)) {
+      progressAPI.getProgress(info.taskID).then((res) => {
+        if (unmountedRef.current) return
+        const p = res.data?.data
+        if (!p) { removeInflight(containerId); return }   // 进度已过期（后端保留 2 小时）：清掉
+        if (p.isDone) { removeInflight(containerId); refetch(); return }
+        // 仍在进行：恢复行内状态并接着轮询
+        setContainerActions(prev => ({
+          ...prev,
+          [containerId]: {
+            action: info.action || 'update',
+            loading: true,
+            progress: p.message || '进行中…',
+            detail: p.detailMsg || '',
+            percentage: p.percentage || 0,
+          },
+        }))
+        setUpdateTasks(prev => ({ ...prev, [containerId]: info.taskID }))
+        pollProgress(containerId, info.taskID)
+      }).catch(() => { removeInflight(containerId) })
+    }
+    return () => { unmountedRef.current = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 容器选择处理函数
   const toggleContainerSelection = (containerId) => {
