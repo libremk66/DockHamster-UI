@@ -170,6 +170,9 @@ export const autoUpdateAPI = {
   getStatus: () => apiClient.get('/api/autoUpdate/status'),
   // 「任务」页：全部任务（进行中 + 保留期内的已完成/失败）
   tasks: () => apiClient.get('/api/tasks'),
+  // 「任务」页历史记录：自动/整组批次运行记录 + 任务级历史（合并按时间倒序）
+  taskHistory: () => apiClient.get('/api/tasks/history'),
+  deleteTaskHistory: (ids) => apiClient.post('/api/tasks/history/delete', { ids }),
   testNotify: (channel, config) => apiClient.post('/api/autoUpdate/testNotify', { channel, config: config || {} }),
   updateGroup: (containerId) => apiClient.post(`/api/container/${containerId}/updateGroup`),
   // 镜像快照（旧镜像回滚）

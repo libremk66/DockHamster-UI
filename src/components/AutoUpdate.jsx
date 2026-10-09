@@ -55,8 +55,6 @@ function Card({ title, icon: Icon, children, className }) {
   )
 }
 
-const TRIGGER_LABEL = { auto: '定时', manual: '手动', group: '整组' }
-
 // 通知渠道定义（与后端 module/notify.go 对应）
 
 export function AutoUpdate() {
@@ -289,7 +287,6 @@ export function AutoUpdate() {
   }
 
   const lastStatus = status?.lastStatus || {}
-  const runs = status?.runs || []
   const activeTasks = status?.activeTasks || []
 
   return (
@@ -608,55 +605,16 @@ export function AutoUpdate() {
         </div>
       </Card>
 
-      {/* 运行记录 */}
-      <Card title="运行记录（最近 30 次）" icon={RefreshCw}>
-        {runs.length === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500">
-            还没有运行记录。{settings.enabled ? '等待计划时间或点「立即运行」。' : '总开关当前关闭。'}
-          </p>
-        ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {runs.map((r, i) => (
-              <div key={i} className="rounded-lg border border-gray-100 dark:border-gray-700/60 bg-gray-50/60 dark:bg-gray-900/30 px-3 py-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="flex items-center gap-2">
-                    <span className={cn(
-                      "px-1.5 py-0.5 rounded text-[10px] font-medium",
-                      r.trigger === 'auto'
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                        : r.trigger === 'group'
-                          ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
-                          : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                    )}>
-                      {TRIGGER_LABEL[r.trigger] || r.trigger}
-                    </span>
-                    <span className="text-gray-500 dark:text-gray-400">{r.time}</span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    {(r.updated || []).length > 0 && <span className="text-emerald-600 dark:text-emerald-400">✅ {r.updated.length}</span>}
-                    {(r.failed || []).length > 0 && <span className="text-red-600 dark:text-red-400">⚠️ {r.failed.length}</span>}
-                    {r.cleanedImages > 0 && <span className="text-gray-500 dark:text-gray-400">🗑️ {r.cleanedImages}</span>}
-                    {(r.snapshots || []).length > 0 && <span className="text-amber-600 dark:text-amber-400">🏷️ {r.snapshots.length}</span>}
-                    <span className="text-gray-400 dark:text-gray-500">⏱ {r.durationSec}s</span>
-                  </span>
-                </div>
-                {((r.updated || []).length > 0 || (r.failed || []).length > 0 || r.note || (r.snapshots || []).length > 0) && (
-                  <div className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                    {(r.updated || []).length > 0 && <div>已更新：{r.updated.join('、')}</div>}
-                    {(r.snapshots || []).length > 0 && (
-                      <div className="text-amber-600 dark:text-amber-400">🏷️ 已打快照：{r.snapshots.join('、')}</div>
-                    )}
-                    {(r.failed || []).map((f, j) => (
-                      <div key={j} className="text-red-500 dark:text-red-400">失败：{f.name}（{f.error}）</div>
-                    ))}
-                    {r.note && <div>ℹ️ {r.note}</div>}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+      {/* 运行记录已并入「任务」页历史记录 */}
+      <Card title="运行记录" icon={RefreshCw}>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          运行记录（含每次自动更新/整组更新的明细）已移到「任务」页 →「历史记录」标签，可按触发方式查看并多选删除。
+          <button className="ml-2 text-primary-600 dark:text-primary-400 hover:underline" onClick={gotoTaskCenter}>
+            前往查看 ↗
+          </button>
+        </p>
       </Card>
+
     </div>
   )
 }
