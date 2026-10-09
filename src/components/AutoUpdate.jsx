@@ -332,7 +332,7 @@ export function AutoUpdate() {
       {sideWarn && (
         <div className="rounded-lg px-4 py-2.5 text-sm flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          容器列表 / 快照统计没能加载（不影响下面的自动更新设置与运行记录），稍后重新进入本页即可。
+          容器列表 / 快照统计没能加载（不影响下面的自动更新设置），稍后重新进入本页即可。
         </div>
       )}
 
@@ -605,15 +605,6 @@ export function AutoUpdate() {
         </div>
       </Card>
 
-      {/* 运行记录已并入「任务」页历史记录 */}
-      <Card title="运行记录" icon={RefreshCw}>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          运行记录（含每次自动更新/整组更新的明细）已移到「任务」页 →「历史记录」标签，可按触发方式查看并多选删除。
-          <button className="ml-2 text-primary-600 dark:text-primary-400 hover:underline" onClick={gotoTaskCenter}>
-            前往查看 ↗
-          </button>
-        </p>
-      </Card>
 
     </div>
   )
