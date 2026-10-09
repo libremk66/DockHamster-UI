@@ -8,7 +8,8 @@ import {
   Info,
   Github,
   ArrowUpCircle,
-  RefreshCw
+  RefreshCw,
+  Layers
 } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle.jsx'
 import { SelfUpdateSection } from './SelfUpdate.jsx'
@@ -74,6 +75,11 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       id: '#containers',
       label: '容器',
       icon: Server,
+    },
+    {
+      id: '#compose',
+      label: 'compose',
+      icon: Layers,
     },
     {
       id: '#autoupdate',
@@ -405,6 +411,11 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       icon: Server,
     },
     {
+      id: '#compose',
+      label: 'compose',
+      icon: Layers,
+    },
+    {
       id: '#autoupdate',
       label: '自动更新',
       icon: RefreshCw,
@@ -434,7 +445,7 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
   return (
     <>
       {windowWidth < 768 && (
-        <nav 
+        <nav
           className="fixed left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full z-40 shadow-lg transition-all duration-300" 
           style={{ 
             bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)'

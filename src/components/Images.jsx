@@ -193,29 +193,36 @@ export function Images() {
       setIsLoading(true)
       setError(null)
 
+      // 候选筛选：无容器引用且无子镜像依赖（后者 daemon 拒绝删除）
       let imagesToDelete = []
       if (type === 'dangling') {
-        imagesToDelete = images.filter(img => img.tag === 'None' || img.tag === '<none>')
+        imagesToDelete = images.filter(img => (img.tag === 'None' || img.tag === '<none>') && !img.hasChildren)
       } else if (type === 'unused') {
-        imagesToDelete = images.filter(img => !img.inUsed)
+        imagesToDelete = images.filter(img => !img.inUsed && !img.hasChildren)
       }
-
+      const skipped = images.filter(img => img.hasChildren && !img.inUsed).length
       if (imagesToDelete.length === 0) {
-        setError('没有找到需要清理的镜像')
+        setError(skipped > 0
+          ? `没有可清理的镜像（${skipped} 个被本地构建镜像依赖，已跳过）`
+          : '没有找到需要清理的镜像')
         setIsLoading(false)
         return
       }
 
-      // 批量删除
-      const deletePromises = imagesToDelete.map(image =>
-        imageAPI.deleteImage(image.id, false)
+      // 单个失败不阻断其余（多 tag 镜像由后端一次解除全部引用）
+      const results = await Promise.allSettled(
+        imagesToDelete.map(image => imageAPI.deleteImage(image.id, false))
       )
+      const failed = results.filter(r => r.status === 'rejected').length
+      const succeeded = results.length - failed
 
-      await Promise.all(deletePromises)
-
-      const message = type === 'dangling'
-        ? `成功清理 ${imagesToDelete.length} 个无Tag镜像`
-        : `成功清理 ${imagesToDelete.length} 个未使用的镜像`
+      const base = type === 'dangling'
+        ? `成功清理 ${succeeded} 个无Tag镜像`
+        : `成功清理 ${succeeded} 个未使用的镜像`
+      const notes = []
+      if (failed > 0) notes.push(`${failed} 个删除失败`)
+      if (skipped > 0) notes.push(`${skipped} 个被本地镜像依赖已跳过`)
+      const message = notes.length > 0 ? `${base}（${notes.join('，')}）` : base
 
       setSuccessModal({ isOpen: true, message })
       fetchImages()
@@ -302,10 +309,10 @@ export function Images() {
             </button>
             <button
               onClick={() => {
-                const imagesToDelete = images.filter(img => img.tag === 'None' || img.tag === '<none>')
+                const imagesToDelete = images.filter(img => (img.tag === 'None' || img.tag === '<none>') && !img.hasChildren)
                 setPruneModal({ isOpen: true, type: 'dangling', images: imagesToDelete })
               }}
-              disabled={isLoading || images.filter(img => img.tag === 'None' || img.tag === '<none>').length === 0}
+              disabled={isLoading || images.filter(img => (img.tag === 'None' || img.tag === '<none>') && !img.hasChildren).length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors disabled:opacity-50 text-sm font-medium"
             >
               <BrushCleaning className="h-4 w-4" />
@@ -313,10 +320,10 @@ export function Images() {
             </button>
             <button
               onClick={() => {
-                const imagesToDelete = images.filter(img => !img.inUsed)
+                const imagesToDelete = images.filter(img => !img.inUsed && !img.hasChildren)
                 setPruneModal({ isOpen: true, type: 'unused', images: imagesToDelete })
               }}
-              disabled={isLoading || images.filter(img => !img.inUsed).length === 0}
+              disabled={isLoading || images.filter(img => !img.inUsed && !img.hasChildren).length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors disabled:opacity-50 text-sm font-medium"
             >
               <BrushCleaning className="h-4 w-4" />
@@ -689,10 +696,26 @@ export function Images() {
                       {formatImageSize(image.size)}
                     </div>
                     {/* ③ 使用情况 */}
-                    <div>
+                    <div className="flex items-center gap-1 flex-wrap">
                       {image.inUsed
                         ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-medium whitespace-nowrap">使用中</span>
                         : <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 font-medium whitespace-nowrap">未使用</span>}
+                      {image.tags?.length > 1 && (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 font-medium whitespace-nowrap"
+                          title={`该镜像被 ${image.tags.length} 个标签引用，删除时一并解除：\n${image.tags.join('\n')}`}
+                        >
+                          {image.tags.length} 个标签
+                        </span>
+                      )}
+                      {image.hasChildren && (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap"
+                          title="被本地构建的镜像作为基础镜像依赖，无法删除"
+                        >
+                          被镜像依赖
+                        </span>
+                      )}
                     </div>
                     {/* ④ 创建时间 */}
                     <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
@@ -722,12 +745,13 @@ export function Images() {
                     </a>
                     <button
                       onClick={() => setDeleteModal({ isOpen: true, image, force: false })}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      title="删除"
+                      disabled={image.hasChildren}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      title={image.hasChildren ? '被本地构建镜像依赖，无法删除' : '删除'}
                     >
                       <Trash2 className="h-3.5 w-3.5" />删除
                     </button>
-                    {image.inUsed && (
+                    {image.inUsed && !image.hasChildren && (
                       <button
                         onClick={() => setDeleteModal({ isOpen: true, image, force: true })}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-orange-600 dark:text-orange-400 border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20"
