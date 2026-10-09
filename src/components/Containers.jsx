@@ -1454,7 +1454,12 @@ export function Containers() {
                         <div>
                           {container.haveUpdate
                             ? <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap">有新版本</span>
-                            : <span className="text-xs text-gray-300 dark:text-gray-600 whitespace-nowrap">已是最新</span>}
+                            : container.uncheckable
+                              ? <span
+                                  title="镜像没有有效标签（悬空/本地构建），无法检测更新。建议在「更新」里把镜像名改成「名称:标签」（如 nginx:latest）后更新一次，可恢复正常。"
+                                  className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400 whitespace-nowrap cursor-help"
+                                >无法检测</span>
+                              : <span className="text-xs text-gray-300 dark:text-gray-600 whitespace-nowrap">已是最新</span>}
                         </div>
                       </div>
 
@@ -1566,6 +1571,8 @@ function ContainerDetailModal({ container, onClose, onRename, onUpdate, onAction
   const queryClient = useQueryClient()
   const [name, setName] = useState(container.name)
   const [imageNameAndTag, setImageNameAndTag] = useState(container.usingImage)
+  // 裸镜像 ID（sha256:… / 短 ID）不是可拉取的名称：给红字提示（后端也会拒绝）
+  const imageRefIsBareId = /^(sha256:)?[0-9a-f]{12,64}$/i.test((imageNameAndTag || '').trim())
   const [isUpdating, setIsUpdating] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [isActionProcessing, setIsActionProcessing] = useState(false)
@@ -2002,13 +2009,13 @@ function ContainerDetailModal({ container, onClose, onRename, onUpdate, onAction
                 type="text"
                 value={imageNameAndTag}
                 onChange={(e) => setImageNameAndTag(e.target.value)}
-                className="input flex-1"
+                className={cn("input flex-1", imageRefIsBareId && "border-red-400 focus:ring-red-400")}
                 placeholder="例如: nginx:latest"
                 disabled={isActionProcessing || isUpdating}
               />
               <button
                 onClick={handleSave}
-                disabled={isUpdating || (imageNameAndTag === currentContainer.usingImage) || !imageNameAndTag.trim()}
+                disabled={isUpdating || imageRefIsBareId || (imageNameAndTag === currentContainer.usingImage) || !imageNameAndTag.trim()}
                 className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center ${isUpdating || (imageNameAndTag === currentContainer.usingImage) || !imageNameAndTag.trim()
                   ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
                   : 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600'
@@ -2027,6 +2034,11 @@ function ContainerDetailModal({ container, onClose, onRename, onUpdate, onAction
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               修改镜像后点击"更换镜像"按钮将重新创建容器
             </p>
+            {imageRefIsBareId && (
+              <p className="mt-1.5 text-xs text-red-500 leading-5">
+                ⚠️ 这是镜像 ID，不是可拉取的名称 —— 直接更新会失败。请改成「名称:标签」的形式（例如 <span className="font-mono">115lite:latest</span>），更新一次后容器就能恢复正常引用。
+              </p>
+            )}
           </div>
         </div>
 
