@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { autoUpdateAPI, containerAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
+import { NotifyChannels } from './NotifyChannels.jsx'
 import { CheckUpdateButton } from './CheckUpdateButton.jsx'
 import { cn } from '../utils/cn.js'
 import { gotoTaskCenter } from '../utils/nav.js'
@@ -56,95 +57,7 @@ function Card({ title, icon: Icon, children, className }) {
 
 const TRIGGER_LABEL = { auto: '定时', manual: '手动', group: '整组' }
 
-const NOTIFY_INPUT_CLS = "w-full px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-
 // 通知渠道定义（与后端 module/notify.go 对应）
-const NOTIFY_GROUPS = [
-  {
-    label: '群机器人', channels: [
-      {
-        type: 'feishu', name: '飞书', fields: [
-          { key: 'appId', label: 'App ID（应用模式；填了走自建应用，消息为卡片）', placeholder: 'cli_xxxxxxxxxxxxxxxx' },
-          { key: 'appSecret', label: 'App Secret（应用模式）', placeholder: '' },
-          { key: 'receiveId', label: '接收者 ID（应用模式必填）', placeholder: 'open_id / user_id / email / 群 chat_id' },
-          {
-            key: 'receiveIdType', label: '接收者类型', type: 'select', options: [
-              { value: 'open_id', label: 'open_id（用户，推荐）' },
-              { value: 'user_id', label: 'user_id（用户）' },
-              { value: 'email', label: 'email（邮箱）' },
-              { value: 'chat_id', label: 'chat_id（群聊）' },
-            ]
-          },
-          { key: 'domain', label: '开放平台域名（可选，Lark 国际版填 https://open.larksuite.com）', placeholder: '' },
-          { key: 'webhook', label: '或：群机器人 Webhook（与上面二选一）', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...' },
-          { key: 'secret', label: '群机器人签名密钥（可选，开了签名校验才需要）', placeholder: '' },
-        ]
-      },
-      {
-        type: 'wecom', name: '企业微信', fields: [
-          { key: 'appId', label: 'CorpID（企业 ID，应用模式；填了走应用消息，可推个人微信）', placeholder: 'wwxxxxxxxxxxxxxxxx' },
-          { key: 'appSecret', label: '应用 Secret（应用模式）', placeholder: '' },
-          { key: 'agentId', label: 'AgentID（应用 ID，应用模式必填）', placeholder: '1000002' },
-          { key: 'receiveId', label: '接收成员（可选，默认 @all）', placeholder: '企业微信账号，多个用 | 分隔，如 zhangsan|lisi' },
-          { key: 'webhook', label: '或：群机器人 Webhook（与上面二选一）', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...' },
-        ]
-      },
-      {
-        type: 'qq', name: 'QQ（官方机器人）', fields: [
-          { key: 'appId', label: 'AppID（QQ 开放平台 → 机器人）', placeholder: '10xxxxxxx' },
-          { key: 'appSecret', label: 'ClientSecret（机器人密钥）', placeholder: '' },
-          { key: 'receiveId', label: '接收目标 ID（⚠️ QQ 主动消息每月限 4 条/群、4 条/用户，目标需先与机器人交互过）', placeholder: '群 group_openid 或 用户 openid' },
-          {
-            key: 'receiveIdType', label: '目标类型', type: 'select', options: [
-              { value: 'group', label: '群聊（group_openid）' },
-              { value: 'user', label: '单聊（用户 openid）' },
-            ]
-          },
-        ]
-      },
-      {
-        type: 'dingtalk', name: '钉钉', fields: [
-          { key: 'webhook', label: 'Webhook 地址', placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...' },
-          { key: 'secret', label: '加签密钥（可选）', placeholder: '' },
-        ]
-      },
-    ]
-  },
-  {
-    label: '手机推送', channels: [
-      {
-        type: 'bark', name: 'Bark', fields: [
-          { key: 'server', label: '服务器（默认 https://api.day.app）', placeholder: 'https://api.day.app' },
-          { key: 'key', label: 'Key', placeholder: '你的 Bark Key' },
-        ]
-      },
-      {
-        type: 'serverchan', name: 'Server酱', fields: [
-          { key: 'sendKey', label: 'SendKey', placeholder: 'SCT...' },
-        ]
-      },
-      {
-        type: 'telegram', name: 'Telegram', fields: [
-          { key: 'token', label: 'Bot Token', placeholder: '123456:ABC...' },
-          { key: 'chatId', label: 'Chat ID', placeholder: '123456789' },
-          { key: 'apiBase', label: 'API 地址（可选，直连不通可填反代）', placeholder: 'https://api.telegram.org' },
-        ]
-      },
-    ]
-  },
-  {
-    label: '通用', channels: [
-      {
-        type: 'webhook', name: '自定义 Webhook', fields: [
-          { key: 'url', label: 'URL', placeholder: 'https://...' },
-          { key: 'method', label: '方法', type: 'select' },
-          { key: 'headers', label: '请求头 JSON（可选）', placeholder: '{"Authorization": "Bearer xxx"}', textarea: true },
-          { key: 'bodyTemplate', label: 'Body 模板（可选，支持 {title} {text}）', placeholder: '{"msg": "{title}"}', textarea: true },
-        ]
-      },
-    ]
-  },
-]
 
 export function AutoUpdate() {
   const [settings, setSettings] = useState(null)
@@ -153,7 +66,6 @@ export function AutoUpdate() {
   const [excludeText, setExcludeText] = useState('')
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [testing, setTesting] = useState(false)
   const [loadErr, setLoadErr] = useState('')
   const [sideWarn, setSideWarn] = useState(false)
   const [loadKey, setLoadKey] = useState(0)
@@ -281,6 +193,29 @@ export function AutoUpdate() {
     }
   }
 
+  // 通知渠道弹窗「确认」时即时保存（复用整份设置保存流程）
+  const saveNotify = async (nextNotify) => {
+    if (!settings) return
+    setBusy(true); setMsg(null)
+    try {
+      const payload = {
+        ...settings,
+        notify: nextNotify,
+        exclude: excludeText.split(',').map((x) => x.trim()).filter(Boolean),
+      }
+      const r = await autoUpdateAPI.saveSettings(payload)
+      if (r.data.code === 200) {
+        setSettings(r.data.data)
+        setExcludeText((r.data.data.exclude || []).join(', '))
+        setMsg({ type: 'ok', text: '已保存并生效' })
+      } else {
+        setMsg({ type: 'err', text: r.data.msg || '保存失败' })
+      }
+    } catch (e) {
+      setMsg({ type: 'err', text: e.response?.data?.msg || e.message || '保存失败' })
+    } finally { setBusy(false) }
+  }
+
   const save = async () => {
     if (!settings) return
     setBusy(true); setMsg(null)
@@ -319,29 +254,8 @@ export function AutoUpdate() {
     }
   }
 
-  // 更新某个渠道的配置（表单态，保存后生效）
-  const updateChannel = (type, patchObj) => {
-    if (!settings) return
-    const notify = settings.notify || {}
-    const cur = notify[type] || {}
-    patch('notify', { ...notify, [type]: { ...cur, ...patchObj } })
-  }
 
   // 测试某个渠道（直接用当前表单值发一条，不用先保存）
-  const testChannel = async (type) => {
-    if (!settings) return
-    setTesting(type); setMsg(null)
-    try {
-      const ch = (settings.notify || {})[type] || {}
-      const r = await autoUpdateAPI.testNotify(type, ch)
-      if (r.data.code === 200 || r.data.code === 0) setMsg({ type: 'ok', text: r.data.msg || '已发送' })
-      else setMsg({ type: 'err', text: r.data.msg || '发送失败' })
-    } catch (e) {
-      setMsg({ type: 'err', text: e.response?.data?.msg || e.message || '发送失败' })
-    } finally {
-      setTesting(null)
-    }
-  }
 
   if (loadErr && !settings) {
     const noApi = loadErr === '__NO_API__'
@@ -690,88 +604,7 @@ export function AutoUpdate() {
             <span className="text-xs text-gray-400 dark:text-gray-500 self-center">渠道勾选后按上面的规则发送；改完点右上角「保存设置」生效</span>
           </div>
 
-          {NOTIFY_GROUPS.map(group => (
-            <div key={group.label}>
-              <p className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-2">{group.label}</p>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {group.channels.map(chDef => {
-                  const ch = (settings.notify || {})[chDef.type] || {}
-                  return (
-                    <div
-                      key={chDef.type}
-                      className={cn(
-                        "rounded-lg border px-3 py-2.5 transition-colors",
-                        ch.enabled
-                          ? "border-primary-300 dark:border-primary-700 bg-primary-50/40 dark:bg-primary-900/10"
-                          : "border-gray-200 dark:border-gray-700"
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-2 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={!!ch.enabled}
-                            onChange={(e) => updateChannel(chDef.type, { enabled: e.target.checked })}
-                            className="h-4 w-4 rounded"
-                          />
-                          <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{chDef.name}</span>
-                        </label>
-                        {ch.enabled && (
-                          <button
-                            onClick={() => testChannel(chDef.type)}
-                            disabled={testing === chDef.type}
-                            className={cn(
-                              "text-xs px-2 py-1 rounded-md border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 flex items-center gap-1",
-                              testing === chDef.type && "opacity-60 cursor-not-allowed"
-                            )}
-                          >
-                            <Send className="h-3 w-3" />
-                            {testing === chDef.type ? '发送中' : '测试'}
-                          </button>
-                        )}
-                      </div>
-                      {ch.enabled && (
-                        <div className="mt-2 space-y-2">
-                          {chDef.fields.map(f => (
-                            <div key={f.key}>
-                              <label className="block text-[11px] text-gray-400 dark:text-gray-500 mb-0.5">{f.label}</label>
-                              {f.type === 'select' ? (
-                                <select
-                                  value={ch[f.key] || ''}
-                                  onChange={(e) => updateChannel(chDef.type, { [f.key]: e.target.value })}
-                                  className={cn(NOTIFY_INPUT_CLS, "text-xs")}
-                                >
-                                  {(f.options || [{ value: '', label: 'POST（默认）' }, { value: 'GET', label: 'GET' }]).map(o => (
-                                    <option key={o.value} value={o.value}>{o.label}</option>
-                                  ))}
-                                </select>
-                              ) : f.textarea ? (
-                                <textarea
-                                  rows={2}
-                                  value={ch[f.key] || ''}
-                                  onChange={(e) => updateChannel(chDef.type, { [f.key]: e.target.value })}
-                                  placeholder={f.placeholder || ''}
-                                  className={cn(NOTIFY_INPUT_CLS, "text-xs font-mono resize-y")}
-                                />
-                              ) : (
-                                <input
-                                  type="text"
-                                  value={ch[f.key] || ''}
-                                  onChange={(e) => updateChannel(chDef.type, { [f.key]: e.target.value })}
-                                  placeholder={f.placeholder || ''}
-                                  className={cn(NOTIFY_INPUT_CLS, "text-xs font-mono")}
-                                />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
+          <NotifyChannels notify={settings.notify || {}} onSave={saveNotify} />
         </div>
       </Card>
 
