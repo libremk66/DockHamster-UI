@@ -609,6 +609,17 @@ export function AutoUpdate() {
                 更新开始前提醒（注意保存工作）
               </span>
             </label>
+            <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+              主机标识
+              <input
+                type="text"
+                value={settings.hostLabel || ''}
+                onChange={(e) => patch('hostLabel', e.target.value)}
+                placeholder={status?.hostLabel ? `自动：${status.hostLabel}` : '留空 = 自动用主机名'}
+                title="通知标题里显示，用于区分不同主机/不同面板实例（同一台机器跑多个面板时建议自定义）"
+                className="w-36 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+              />
+            </label>
             {settings.notifyBeforeUpdate && (
               <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 select-none">
                 提前
