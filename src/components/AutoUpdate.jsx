@@ -609,6 +609,29 @@ export function AutoUpdate() {
                 更新开始前提醒（注意保存工作）
               </span>
             </label>
+            {settings.notifyBeforeUpdate && (
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 select-none">
+                提前
+                <input
+                  type="number" min={1} max={120}
+                  value={settings.notifyBeforeUpdateLeadMin || 10}
+                  onChange={(e) => patch('notifyBeforeUpdateLeadMin', Math.max(1, Math.min(120, parseInt(e.target.value || '10', 10) || 10)))}
+                  className="w-16 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-center"
+                />
+                分钟提醒
+              </label>
+            )}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!settings.notifyOnManualUpdate}
+                onChange={(e) => patch('notifyOnManualUpdate', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="容器页单个容器的「更新」完成后，也发一条结果简报（整组/自动更新本来就会发，不受影响）">
+                手动更新完成也发简报
+              </span>
+            </label>
             <span className="text-xs text-gray-400 dark:text-gray-500 self-center">渠道勾选后按上面的规则发送；改完点右上角「保存设置」生效</span>
           </div>
 
