@@ -598,6 +598,17 @@ export function AutoUpdate() {
                 容器异常告警（退出 / OOM / 重启循环）
               </span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!settings.notifyBeforeUpdate}
+                onChange={(e) => patch('notifyBeforeUpdate', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="定时更新开始前，先发一条消息列出即将更新的容器，提醒保存工作（手动「立即运行」不提醒）">
+                更新开始前提醒（注意保存工作）
+              </span>
+            </label>
             <span className="text-xs text-gray-400 dark:text-gray-500 self-center">渠道勾选后按上面的规则发送；改完点右上角「保存设置」生效</span>
           </div>
 
