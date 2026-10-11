@@ -77,11 +77,6 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       icon: Server,
     },
     {
-      id: '#compose',
-      label: 'Compose',
-      icon: Boxes,
-    },
-    {
       id: '#autoupdate',
       label: '自动更新',
       icon: RefreshCw,
@@ -95,6 +90,11 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       id: '#images',
       label: '镜像',
       icon: Box,
+    },
+    {
+      id: '#compose',
+      label: 'Compose',
+      icon: Boxes,
     },
     {
       id: '#migrate',
@@ -411,11 +411,6 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       icon: Server,
     },
     {
-      id: '#compose',
-      label: 'Compose',
-      icon: Boxes,
-    },
-    {
       id: '#autoupdate',
       label: '自动更新',
       icon: RefreshCw,
@@ -429,6 +424,11 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       id: '#images',
       label: '镜像',
       icon: Box,
+    },
+    {
+      id: '#compose',
+      label: 'Compose',
+      icon: Boxes,
     },
     {
       id: '#migrate',
