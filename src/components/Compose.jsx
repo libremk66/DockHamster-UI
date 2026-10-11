@@ -9,6 +9,13 @@ import {
   CheckCircle2,
   HelpCircle,
   ChevronDown,
+  Info,
+  Layers,
+  GitCompare,
+  Target,
+  FolderSearch,
+  ListOrdered,
+  Wrench,
   Loader2,
 } from 'lucide-react'
 import { projectAPI } from '../api/client.js'
@@ -346,7 +353,7 @@ export function Compose() {
         <div className="card p-4 border-primary-200 dark:border-primary-800 bg-primary-50/60 dark:bg-primary-900/10">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300 min-w-0">
-              <div className="font-semibold text-gray-900 dark:text-white">这个页面是干什么的？</div>
+              <div className="flex items-center gap-1.5 font-semibold text-gray-900 dark:text-white"><Info className="h-4 w-4 text-primary-500 dark:text-primary-400" />这个页面是干什么的？</div>
               <ul className="list-disc pl-4 space-y-1">
                 <li>
                   用 <code className="font-mono">docker compose</code> 创建的容器，会自动按项目归组显示在这里（无需任何配置）
@@ -355,9 +362,7 @@ export function Compose() {
                   每个项目下面是它的所有服务（容器）。<b>更新的入口不在这个页面</b>——仍和以前一样在「容器」页 /「自动更新」里点；这里解决的是"更新基于什么参数"
                 </li>
               </ul>
-              <div className="font-semibold text-gray-900 dark:text-white pt-1">
-                三种状态是一条递进的阶梯——三种方式都会把镜像更新掉，区别只在：重建容器时"用哪份配置"
-              </div>
+              <div className="flex items-center gap-1.5 font-semibold text-gray-900 dark:text-white pt-1"><Layers className="h-4 w-4 text-primary-500 dark:text-primary-400" />三种状态是一条递进的阶梯——三种方式都会把镜像更新掉，区别只在：重建容器时"用哪份配置"</div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
@@ -406,9 +411,7 @@ export function Compose() {
                 </table>
               </div>
               <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
-                <p className="font-medium text-gray-700 dark:text-gray-300">
-                  为什么"容器上次创建时的记录"会跟 compose 文件不一样？
-                </p>
+                <p className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300"><GitCompare className="h-4 w-4 text-gray-400" />为什么"容器上次创建时的记录"会跟 compose 文件不一样？</p>
                 <ul className="list-disc pl-4 space-y-0.5">
                   <li>
                     <b>文件改了、容器没跟上</b>：你编辑了 compose 文件但没重新部署（改完忘了，或以为下次更新会自动带上）→ 容器里还是旧配置
@@ -422,7 +425,7 @@ export function Compose() {
                 </p>
               </div>
               <div className="space-y-1 pt-1">
-                <div className="font-semibold text-gray-900 dark:text-white">这个页面我不做设置行不行？</div>
+                <div className="flex items-center gap-1.5 font-semibold text-gray-900 dark:text-white"><HelpCircle className="h-4 w-4 text-primary-500 dark:text-primary-400" />这个页面我不做设置行不行？</div>
                 <ul className="list-disc pl-4 space-y-1 text-gray-700 dark:text-gray-300">
                   <li>
                     <b>行。</b>这一页是"增强"，不是"必须"。完全不管它，更新也照常工作——镜像照常更新到最新，只是重建时配置以容器现状为准。
@@ -485,7 +488,7 @@ export function Compose() {
 
           {/* 模块：作用 */}
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
-            <div className="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">作用</div>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white mb-1.5"><Target className="h-4 w-4 text-primary-500 dark:text-primary-400" />作用</div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               使容器的更新基于 compose 配置文件——更新时以文件为准，文件里改的端口、环境变量、版本都会生效；
               读不到文件时，更新只能"按容器现状重建"，文件里的改动不会生效。
@@ -494,7 +497,7 @@ export function Compose() {
 
           {/* 模块：自动检测 */}
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
-            <div className="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">compose 配置文件位置-自动检测</div>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white mb-1.5"><FolderSearch className="h-4 w-4 text-primary-500 dark:text-primary-400" />compose 配置文件位置-自动检测</div>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
               （不用自己判断是哪种，以下是 DockHamster 面板从本机现有容器检测、需要挂载的目录，可在确认无误后挂载）：
             </p>
@@ -542,7 +545,7 @@ export function Compose() {
 
           {/* 模块：流程 */}
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
-            <div className="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">步骤</div>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white mb-1.5"><ListOrdered className="h-4 w-4 text-primary-500 dark:text-primary-400" />步骤</div>
             <ol className="list-decimal pl-5 space-y-1 text-sm text-gray-600 dark:text-gray-400">
               <li>打开你部署 DockHamster 的 compose 文件（docker run 部署的则是启动命令/脚本）</li>
               <li>
@@ -562,7 +565,7 @@ export function Compose() {
       {data && (
         <details className="card p-4">
           <summary className="cursor-pointer select-none text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <span>高级设置：路径修正（挂载的路径映射失效时用）</span>
+            <span className="flex items-center gap-1.5"><Wrench className="h-4 w-4 text-gray-400" />高级设置：路径修正（挂载的路径映射失效时用）</span>
             {(data.extraRoots?.length || 0) > 0 && <span className="badge-info">已配置 {data.extraRoots.length} 项</span>}
           </summary>
           <div className="mt-3 space-y-2">
