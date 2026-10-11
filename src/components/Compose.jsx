@@ -931,7 +931,7 @@ export function Compose() {
           <div className="mt-3 space-y-3">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               把「可读」项目的 compose 配置（含同目录 .env，原样打包）按计划上传到你的 WebDAV——
-              群晖 / 坚果云 / Nextcloud / Alist 等均可。备份失败会通过已配置的通知渠道提醒。
+              群晖 / 坚果云 / Nextcloud / Alist 等均可。备份结果的通知开关在「自动更新」页的通知区（失败默认通知）。
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">

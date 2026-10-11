@@ -491,6 +491,113 @@ export function AutoUpdate() {
         </div>
       )}
 
+      {/* 通知（多渠道） */}
+      <Card title="通知（多渠道）" icon={Bell}>
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={settings.notifyOnSuccess}
+                onChange={(e) => patch('notifyOnSuccess', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">更新成功时发送简报</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={settings.notifyOnFailure}
+                onChange={(e) => patch('notifyOnFailure', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">出现失败时发送告警</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!settings.watchdogDisabled}
+                onChange={(e) => patch('watchdogDisabled', !e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="容器意外退出 / 被 OOM 杀掉 / 反复重启时推送；面板主动的停止重启不会误报">
+                容器异常告警（退出 / OOM / 重启循环）
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!settings.notifyBeforeUpdate}
+                onChange={(e) => patch('notifyBeforeUpdate', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="定时更新开始前，先发一条消息列出即将更新的容器，提醒保存工作（手动「立即运行」不提醒）">
+                更新开始前提醒（注意保存工作）
+              </span>
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+              主机标识
+              <input
+                type="text"
+                value={settings.hostLabel || ''}
+                onChange={(e) => patch('hostLabel', e.target.value)}
+                placeholder={status?.hostLabel ? `自动：${status.hostLabel}` : '留空 = 自动用主机名'}
+                title="通知标题里显示，用于区分不同主机/不同面板实例（同一台机器跑多个面板时建议自定义）"
+                className="w-36 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+              />
+            </label>
+            {settings.notifyBeforeUpdate && (
+              <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 select-none">
+                提前
+                <input
+                  type="number" min={1} max={120}
+                  value={settings.notifyBeforeUpdateLeadMin || 10}
+                  onChange={(e) => patch('notifyBeforeUpdateLeadMin', Math.max(1, Math.min(120, parseInt(e.target.value || '10', 10) || 10)))}
+                  className="w-16 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-center"
+                />
+                分钟提醒
+              </label>
+            )}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!settings.notifyOnManualUpdate}
+                onChange={(e) => patch('notifyOnManualUpdate', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="容器页单个容器的「更新」完成后，也发一条结果简报（整组/自动更新本来就会发，不受影响）">
+                手动更新完成也发简报
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!settings.notifyOnBackupSuccess}
+                onChange={(e) => patch('notifyOnBackupSuccess', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="「Compose」页的 WebDAV 配置备份成功时也发一条简报（默认关：每天一条会比较吵）">
+                配置备份成功时通知
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!settings.notifyOnBackupFailure}
+                onChange={(e) => patch('notifyOnBackupFailure', e.target.checked)}
+                className="h-4 w-4 rounded"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300" title="「Compose」页的 WebDAV 配置备份失败时发告警（默认开）">
+                配置备份失败时告警
+              </span>
+            </label>
+            <span className="text-xs text-gray-400 dark:text-gray-500 self-center">渠道勾选后按上面的规则发送；改完点右上角「保存设置」生效</span>
+          </div>
+
+          <NotifyChannels notify={settings.notify || {}} onSave={saveNotify} />
+        </div>
+      </Card>
+
       {/* 白名单 */}
       <Card title="自动更新白名单" icon={Zap}>
         <div className="space-y-3">
@@ -570,90 +677,6 @@ export function AutoUpdate() {
         </div>
       </Card>
 
-      {/* 通知（多渠道） */}
-      <Card title="通知（多渠道）" icon={Bell}>
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={settings.notifyOnSuccess}
-                onChange={(e) => patch('notifyOnSuccess', e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">更新成功时发送简报</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={settings.notifyOnFailure}
-                onChange={(e) => patch('notifyOnFailure', e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">出现失败时发送告警</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={!settings.watchdogDisabled}
-                onChange={(e) => patch('watchdogDisabled', !e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300" title="容器意外退出 / 被 OOM 杀掉 / 反复重启时推送；面板主动的停止重启不会误报">
-                容器异常告警（退出 / OOM / 重启循环）
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={!!settings.notifyBeforeUpdate}
-                onChange={(e) => patch('notifyBeforeUpdate', e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300" title="定时更新开始前，先发一条消息列出即将更新的容器，提醒保存工作（手动「立即运行」不提醒）">
-                更新开始前提醒（注意保存工作）
-              </span>
-            </label>
-            <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-              主机标识
-              <input
-                type="text"
-                value={settings.hostLabel || ''}
-                onChange={(e) => patch('hostLabel', e.target.value)}
-                placeholder={status?.hostLabel ? `自动：${status.hostLabel}` : '留空 = 自动用主机名'}
-                title="通知标题里显示，用于区分不同主机/不同面板实例（同一台机器跑多个面板时建议自定义）"
-                className="w-36 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-              />
-            </label>
-            {settings.notifyBeforeUpdate && (
-              <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 select-none">
-                提前
-                <input
-                  type="number" min={1} max={120}
-                  value={settings.notifyBeforeUpdateLeadMin || 10}
-                  onChange={(e) => patch('notifyBeforeUpdateLeadMin', Math.max(1, Math.min(120, parseInt(e.target.value || '10', 10) || 10)))}
-                  className="w-16 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-center"
-                />
-                分钟提醒
-              </label>
-            )}
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={!!settings.notifyOnManualUpdate}
-                onChange={(e) => patch('notifyOnManualUpdate', e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300" title="容器页单个容器的「更新」完成后，也发一条结果简报（整组/自动更新本来就会发，不受影响）">
-                手动更新完成也发简报
-              </span>
-            </label>
-            <span className="text-xs text-gray-400 dark:text-gray-500 self-center">渠道勾选后按上面的规则发送；改完点右上角「保存设置」生效</span>
-          </div>
-
-          <NotifyChannels notify={settings.notify || {}} onSave={saveNotify} />
-        </div>
-      </Card>
 
 
     </div>
