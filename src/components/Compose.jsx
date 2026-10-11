@@ -19,9 +19,11 @@ import {
   FileText,
   ScrollText,
   X,
+  Download,
+  CloudUpload,
   Loader2,
 } from 'lucide-react'
-import { containerAPI, projectAPI } from '../api/client.js'
+import { composeBackupAPI, containerAPI, projectAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 
 // 「Compose」页：compose 项目 / 服务分组视图
@@ -79,6 +81,54 @@ function FilterChip({ active, tone = 'gray', onClick, children }) {
       {children}
     </button>
   )
+}
+
+// 开关（与其它设置页样式一致）
+function Switch({ checked, onChange, disabled = false }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0',
+        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+        checked ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow',
+          checked ? 'translate-x-5' : 'translate-x-0.5'
+        )}
+      />
+    </button>
+  )
+}
+
+// 时间 ↔ cron（备份计划按"每天 HH:MM"呈现；后端存标准 5 段 cron）
+const pad2 = (n) => String(n).padStart(2, '0')
+const cronToTime = (cron) => {
+  const m = String(cron || '').match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/)
+  return m ? `${pad2(+m[2])}:${pad2(+m[1])}` : ''
+}
+const timeToCron = (t) => {
+  const [h, m] = String(t || '03:00').split(':')
+  return `${+m || 0} ${+h || 3} * * *`
+}
+const tsName = () => {
+  const d = new Date()
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`
+}
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 // 原文 / 日志只读查看弹窗
@@ -152,7 +202,7 @@ function StateBadge({ state }) {
 }
 
 // 列表行：每个 compose 项目一行、等高（h-11）；点击展开/收起服务明细（手风琴式，展开时推开下面的行）
-function ProjectRow({ project: p, onViewFile, onViewLogs }) {
+function ProjectRow({ project: p, onViewFile, onViewLogs, onExport }) {
   const [open, setOpen] = useState(false)
   const services = p.services || []
   const updateCount = services.filter((s) => s.haveUpdate).length
@@ -252,6 +302,15 @@ function ProjectRow({ project: p, onViewFile, onViewLogs }) {
                 <FileText className="h-3.5 w-3.5" />
                 查看原文
               </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400 hover:underline flex-shrink-0"
+                title="导出该项目的 compose 配置（zip 下载）"
+                onClick={() => onExport(p)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                导出
+              </button>
             </div>
           )}
           <div className="text-gray-500 dark:text-gray-400">
@@ -284,6 +343,10 @@ export function Compose() {
   const guideRef = useRef(null)
   const [viewer, setViewer] = useState(null)
   const viewerSeq = useRef(0)
+  const [bk, setBk] = useState(null)           // 备份设置（服务端 get 后填充）
+  const [bkTime, setBkTime] = useState('03:00') // 每天备份时间（HH:MM）
+  const [bkBusy, setBkBusy] = useState('')      // '' | test | save | run
+  const [bkMsg, setBkMsg] = useState(null)      // {type:'ok'|'err', text}
   const [showIntro, setShowIntro] = useState(() => {
     try {
       return localStorage.getItem('dh_apps_intro_hidden') !== '1'
@@ -328,10 +391,6 @@ export function Compose() {
       if (!silent) setLoading(false)
     }
   }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   // 复制到剪贴板：优先 clipboard API；http 非安全上下文（用 IP 访问时）不可用 → 降级 execCommand
   const copyText = async (text, key) => {
@@ -444,6 +503,101 @@ export function Compose() {
     fetchLogs(seq, viewer.containerId)
   }
 
+  // ── 配置导出（zip 直接下载）──
+  const blobErrMsg = async (e) => {
+    const d = e?.response?.data
+    if (d instanceof Blob) {
+      try {
+        const j = JSON.parse(await d.text())
+        return j.msg || '导出失败'
+      } catch {
+        return '导出失败'
+      }
+    }
+    return d?.msg || e?.message || '导出失败'
+  }
+
+  const exportConfigs = async (project) => {
+    setMsg(null)
+    try {
+      const r = project ? await projectAPI.exportOne(project) : await projectAPI.exportAll()
+      const name = project
+        ? `dockhamster-compose-${project.replace(/[^A-Za-z0-9._-]+/g, '_')}-${tsName()}.zip`
+        : `dockhamster-compose-${tsName()}.zip`
+      downloadBlob(r.data, name)
+      setMsg({ type: 'ok', text: project ? `「${project}」配置已开始下载` : '全部配置已开始下载' })
+    } catch (e) {
+      setMsg({ type: 'err', text: await blobErrMsg(e) })
+    }
+  }
+
+  // ── WebDAV 自动备份 ──
+  const loadBackup = useCallback(async () => {
+    try {
+      const r = await composeBackupAPI.getSettings()
+      if (okCode(r)) {
+        setBk(r.data.data)
+        setBkTime(cronToTime(r.data.data?.cron) || '03:00')
+      }
+    } catch {
+      /* 静默：备份设置拿不到不影响主视图 */
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+    loadBackup()
+  }, [load, loadBackup])
+
+  const testBackup = async () => {
+    if (!bk) return
+    setBkBusy('test')
+    setBkMsg(null)
+    try {
+      const r = await composeBackupAPI.test({ url: bk.url, username: bk.username, password: bk.password, remoteDir: bk.remoteDir })
+      const okk = okCode(r) && r.data.data?.ok
+      setBkMsg({ type: okk ? 'ok' : 'err', text: r.data.msg || (okk ? '连接成功' : '连接失败') })
+    } catch (e) {
+      setBkMsg({ type: 'err', text: e?.response?.data?.msg || e?.message || '测试失败' })
+    } finally {
+      setBkBusy('')
+    }
+  }
+
+  const saveBackup = async () => {
+    if (!bk) return
+    setBkBusy('save')
+    setBkMsg(null)
+    try {
+      const r = await composeBackupAPI.saveSettings({ ...bk, cron: timeToCron(bkTime) })
+      if (okCode(r)) {
+        setBk(r.data.data)
+        setBkMsg({ type: 'ok', text: '已保存' })
+      } else {
+        setBkMsg({ type: 'err', text: r.data.msg || '保存失败' })
+      }
+    } catch (e) {
+      setBkMsg({ type: 'err', text: e?.response?.data?.msg || e?.message || '保存失败' })
+    } finally {
+      setBkBusy('')
+    }
+  }
+
+  const runBackup = async () => {
+    setBkBusy('run')
+    setBkMsg(null)
+    try {
+      const r = await composeBackupAPI.run()
+      setBkMsg({ type: okCode(r) ? 'ok' : 'err', text: r.data.msg || (okCode(r) ? '备份完成' : '备份失败') })
+      await loadBackup()
+    } catch (e) {
+      setBkMsg({ type: 'err', text: e?.response?.data?.msg || e?.message || '备份失败' })
+      await loadBackup()
+    } finally {
+      setBkBusy('')
+    }
+  }
+
   const saveRoots = async () => {
     const roots = rootsText
       .split(/[\n,]/)
@@ -501,6 +655,10 @@ export function Compose() {
               页面说明
             </button>
           )}
+          <button className="btn-secondary" onClick={() => exportConfigs('')} title="打包下载全部可读项目的 compose 配置（含 .env）">
+            <Download className="h-4 w-4 mr-1.5" />
+            导出配置
+          </button>
           <button className="btn-secondary" onClick={() => load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
             刷新
@@ -760,6 +918,116 @@ export function Compose() {
         </details>
       )}
 
+      {/* 自动备份到 WebDAV */}
+      {data && bk && (
+        <details className="card p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
+            <CloudUpload className="h-4 w-4 text-gray-400" />
+            <span>自动备份到 WebDAV</span>
+            {bk.enabled && <span className="badge-success">已开启 · 每天 {bkTime}</span>}
+            {bk.lastRun &&
+              (bk.lastOk ? <span className="badge-success">最近成功</span> : <span className="badge-error">最近失败</span>)}
+          </summary>
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              把「可读」项目的 compose 配置（含同目录 .env，原样打包）按计划上传到你的 WebDAV——
+              群晖 / 坚果云 / Nextcloud / Alist 等均可。备份失败会通过已配置的通知渠道提醒。
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
+                <span>WebDAV 地址</span>
+                <input
+                  className="input font-mono text-sm"
+                  placeholder="https://dav.example.com/dav/"
+                  value={bk.url || ''}
+                  onChange={(e) => setBk({ ...bk, url: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
+                <span>远端目录</span>
+                <input
+                  className="input font-mono text-sm"
+                  placeholder="dockhamster/compose"
+                  value={bk.remoteDir || ''}
+                  onChange={(e) => setBk({ ...bk, remoteDir: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
+                <span>用户名</span>
+                <input
+                  className="input text-sm"
+                  value={bk.username || ''}
+                  onChange={(e) => setBk({ ...bk, username: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
+                <span>密码 / 应用密码</span>
+                <input
+                  className="input text-sm"
+                  type="password"
+                  value={bk.password || ''}
+                  onChange={(e) => setBk({ ...bk, password: e.target.value })}
+                />
+              </label>
+              <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
+                <span>每天备份时间</span>
+                <input className="input text-sm" type="time" value={bkTime} onChange={(e) => setBkTime(e.target.value)} />
+              </label>
+              <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
+                <span>远端保留份数</span>
+                <input
+                  className="input text-sm"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={bk.keep || 7}
+                  onChange={(e) => setBk({ ...bk, keep: +e.target.value || 7 })}
+                />
+              </label>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Switch checked={!!bk.enabled} onChange={(v) => setBk({ ...bk, enabled: v })} />
+              <span className="text-xs text-gray-600 dark:text-gray-400">开启自动备份</span>
+              <span className="flex-1" />
+              <button className="btn-secondary" onClick={testBackup} disabled={!!bkBusy}>
+                {bkBusy === 'test' ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null}
+                测试连接
+              </button>
+              <button className="btn-secondary" onClick={runBackup} disabled={!!bkBusy}>
+                {bkBusy === 'run' ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null}
+                立即备份
+              </button>
+              <button className="btn-primary" onClick={saveBackup} disabled={!!bkBusy}>
+                {bkBusy === 'save' ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null}
+                保存
+              </button>
+            </div>
+            {bkMsg && (
+              <div
+                className={cn(
+                  'text-xs rounded-lg px-3 py-2',
+                  bkMsg.type === 'ok'
+                    ? 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                    : 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-200'
+                )}
+              >
+                {bkMsg.text}
+              </div>
+            )}
+            {bk.lastRun && (
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                最近备份：{bk.lastRun} ·{' '}
+                {bk.lastOk ? (
+                  <span className="text-green-700 dark:text-green-400">成功（{bk.lastFile}）</span>
+                ) : (
+                  <span className="text-red-600 dark:text-red-400">失败：{bk.lastError}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </details>
+      )}
+
       {/* 统计 + 状态筛选（点标签筛选下面的列表） */}
       {data && projects.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
@@ -836,7 +1104,7 @@ export function Compose() {
             <span className="w-4 flex-shrink-0" />
           </div>
           {shownProjects.map((p) => (
-            <ProjectRow key={p.name} project={p} onViewFile={openFileView} onViewLogs={openLogsView} />
+            <ProjectRow key={p.name} project={p} onViewFile={openFileView} onViewLogs={openLogsView} onExport={(proj) => exportConfigs(proj.name)} />
           ))}
         </div>
       )}

@@ -209,6 +209,18 @@ export const autoUpdateAPI = {
 export const projectAPI = {
   list: () => apiClient.get('/api/projects', { timeout: 20000 }),
   saveRoots: (roots) => apiClient.post('/api/projects/roots', { roots: roots || [] }),
+  // 导出配置（zip 附件；鉴权走请求头，所以用 blob 下载）
+  exportAll: () => apiClient.get('/api/projects/export', { responseType: 'blob', timeout: 60000 }),
+  exportOne: (name) =>
+    apiClient.get('/api/projects/export', { params: { project: name }, responseType: 'blob', timeout: 60000 }),
+}
+
+// Compose 配置自动备份（WebDAV）
+export const composeBackupAPI = {
+  getSettings: () => apiClient.get('/api/composeBackup/settings'),
+  saveSettings: (s) => apiClient.post('/api/composeBackup/settings', s),
+  test: (payload) => apiClient.post('/api/composeBackup/test', payload, { timeout: 30000 }),
+  run: () => apiClient.post('/api/composeBackup/run', {}, { timeout: 180000 }),
 }
 
 // GitHub API - 用于检查前端更新
