@@ -1,6 +1,7 @@
 import React from 'react'
 import {
   Box,
+  Boxes,
   LogOut,
   Server,
   Package,
@@ -74,6 +75,11 @@ export function Sidebar({ activeTab, onTabChange, onLogout, isCollapsed = false,
       id: '#containers',
       label: '容器',
       icon: Server,
+    },
+    {
+      id: '#compose',
+      label: 'Compose',
+      icon: Boxes,
     },
     {
       id: '#autoupdate',
@@ -403,6 +409,11 @@ export function MobileBottomNav({ activeTab, onTabChange, windowWidth = 1024 }) 
       id: '#containers',
       label: '容器',
       icon: Server,
+    },
+    {
+      id: '#compose',
+      label: 'Compose',
+      icon: Boxes,
     },
     {
       id: '#autoupdate',

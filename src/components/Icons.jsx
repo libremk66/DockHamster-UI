@@ -52,14 +52,37 @@ export function Icons() {
     saveFavorites(newFavorites)
   }
 
-  // 复制图标URL到剪贴板
+  // 复制图标URL到剪贴板（http 非安全上下文降级 execCommand）
   const copyToClipboard = async (url, iconName) => {
-    try {
-      await navigator.clipboard.writeText(url)
+    let ok = false
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(url)
+        ok = true
+      } catch {
+        ok = false
+      }
+    }
+    if (!ok) {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = url
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.top = '-1000px'
+        document.body.appendChild(ta)
+        ta.select()
+        ok = document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        ok = false
+      }
+    }
+    if (ok) {
       setCopiedIcon(iconName)
       setTimeout(() => setCopiedIcon(null), 2000)
-    } catch (err) {
-      console.error('复制失败:', err)
+    } else {
+      console.error('复制失败：浏览器不允许，请手动选择复制')
     }
   }
 

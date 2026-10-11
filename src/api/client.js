@@ -201,6 +201,12 @@ export const autoUpdateAPI = {
   migrateApply: (payload) => apiClient.post('/api/migrate/imports/apply', payload),
 }
 
+// 「Compose」页（compose 项目视图）
+export const projectAPI = {
+  list: () => apiClient.get('/api/projects', { timeout: 20000 }),
+  saveRoots: (roots) => apiClient.post('/api/projects/roots', { roots: roots || [] }),
+}
+
 // GitHub API - 用于检查前端更新
 export const githubAPI = {
   /**
