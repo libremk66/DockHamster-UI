@@ -107,6 +107,10 @@ export const containerAPI = {
   renameContainer: (id, newName) => {
     return apiClient.post(`/api/container/${id}/rename?newName=${encodeURIComponent(newName)}`)
   },
+  // compose 原文（只读；不可达时接口返回明确报错）
+  getComposeFile: (id) => apiClient.get(`/api/container/${id}/composefile`, { timeout: 15000 }),
+  // 容器日志（纯文本，最近 200 行含时间戳）
+  getLogs: (id) => apiClient.get(`/api/container/${id}/logs`, { timeout: 20000 }),
   updateContainer: (id, containerName, imageNameAndTag, delOldContainer) => {
     const formData = new FormData()
     formData.append('containerName', containerName)

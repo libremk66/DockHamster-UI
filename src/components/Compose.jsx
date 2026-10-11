@@ -16,9 +16,12 @@ import {
   FolderSearch,
   ListOrdered,
   Wrench,
+  FileText,
+  ScrollText,
+  X,
   Loader2,
 } from 'lucide-react'
-import { projectAPI } from '../api/client.js'
+import { containerAPI, projectAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 
 // 「Compose」页：compose 项目 / 服务分组视图
@@ -78,6 +81,65 @@ function FilterChip({ active, tone = 'gray', onClick, children }) {
   )
 }
 
+// 原文 / 日志只读查看弹窗
+function CodeViewer({ viewer, onClose, onRefresh, onCopy }) {
+  const [copied, setCopied] = useState(false)
+  const isFile = viewer.kind === 'file'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative card w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/60">
+          {isFile ? <FileText className="h-4 w-4 text-primary-500 flex-shrink-0" /> : <ScrollText className="h-4 w-4 text-primary-500 flex-shrink-0" />}
+          <span className="font-semibold text-sm text-gray-900 dark:text-white truncate flex-1">{viewer.title}</span>
+          {!isFile && (
+            <button className="btn-icon-secondary" onClick={onRefresh} title="刷新">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          )}
+          <button className="btn-icon-secondary" onClick={onClose} title="关闭">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {viewer.subtitle && (
+          <div className="px-4 py-1.5 text-xs text-gray-400 dark:text-gray-500 font-mono truncate border-b border-gray-100 dark:border-gray-700/60" title={viewer.subtitle}>
+            {viewer.subtitle}
+          </div>
+        )}
+        <div className="flex-1 overflow-auto bg-gray-900 dark:bg-black/60 min-h-[200px]">
+          {viewer.loading ? (
+            <div className="p-4 flex items-center gap-2 text-gray-400 text-xs">
+              <Loader2 className="h-4 w-4 animate-spin" /> 加载中…
+            </div>
+          ) : viewer.error ? (
+            <div className="p-4 text-red-300 text-xs whitespace-pre-wrap">{viewer.error}</div>
+          ) : (
+            <pre className="text-xs font-mono text-gray-100 p-4 whitespace-pre-wrap break-all">{viewer.content || '(无内容)'}</pre>
+          )}
+        </div>
+        <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-2">
+          <button
+            className="btn-secondary"
+            onClick={async () => {
+              const ok = await onCopy()
+              if (ok) {
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              }
+            }}
+            disabled={viewer.loading || !!viewer.error}
+          >
+            {copied ? '已复制 ✓' : '复制内容'}
+          </button>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {isFile ? '只读展示，不会修改文件' : '最新 200 行（含时间戳）'}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function StateBadge({ state }) {
   const meta = STATE_META[state] || STATE_META.noFile
   const Icon = meta.icon
@@ -90,7 +152,7 @@ function StateBadge({ state }) {
 }
 
 // 列表行：每个 compose 项目一行、等高（h-11）；点击展开/收起服务明细（手风琴式，展开时推开下面的行）
-function ProjectRow({ project: p }) {
+function ProjectRow({ project: p, onViewFile, onViewLogs }) {
   const [open, setOpen] = useState(false)
   const services = p.services || []
   const updateCount = services.filter((s) => s.haveUpdate).length
@@ -164,12 +226,32 @@ function ProjectRow({ project: p }) {
                     无法检测
                   </span>
                 )}
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400 hover:underline flex-shrink-0"
+                  title={`查看 ${svc.name} 的日志（最近 200 行）`}
+                  onClick={() => onViewLogs(svc, p)}
+                >
+                  <ScrollText className="h-3.5 w-3.5" />
+                  日志
+                </button>
               </div>
             ))}
           </div>
           {p.configFiles?.length > 0 && (
-            <div className="text-gray-400 dark:text-gray-500 font-mono truncate" title={p.configFiles.join('\n')}>
-              文件：{p.configFiles[0]}
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 dark:text-gray-500 font-mono truncate flex-1" title={p.configFiles.join('\n')}>
+                文件：{p.configFiles[0]}
+              </span>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400 hover:underline flex-shrink-0"
+                title="查看 compose 文件原文（只读）"
+                onClick={() => onViewFile(p)}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                查看原文
+              </button>
             </div>
           )}
           <div className="text-gray-500 dark:text-gray-400">
@@ -185,6 +267,7 @@ function ProjectRow({ project: p }) {
           </div>
         </div>
       )}
+
     </div>
   )
 }
@@ -199,6 +282,8 @@ export function Compose() {
   const [copiedKey, setCopiedKey] = useState('')
   const [filter, setFilter] = useState('all')
   const guideRef = useRef(null)
+  const [viewer, setViewer] = useState(null)
+  const viewerSeq = useRef(0)
   const [showIntro, setShowIntro] = useState(() => {
     try {
       return localStorage.getItem('dh_apps_intro_hidden') !== '1'
@@ -282,6 +367,81 @@ export function Compose() {
     } else {
       setMsg({ type: 'err', text: '复制失败，请手动选择复制' })
     }
+    return ok
+  }
+
+  // ── 原文 / 日志查看（只读弹窗）──
+  const closeViewer = () => {
+    viewerSeq.current++
+    setViewer(null)
+  }
+
+  const fetchLogs = async (seq, id) => {
+    try {
+      const r = await containerAPI.getLogs(id)
+      if (viewerSeq.current !== seq) return
+      setViewer((v) => (v ? { ...v, loading: false, content: typeof r.data === 'string' ? r.data : JSON.stringify(r.data) } : v))
+    } catch (e) {
+      if (viewerSeq.current !== seq) return
+      const msg =
+        typeof e?.response?.data === 'string' && e.response.data
+          ? e.response.data
+          : e?.response?.data?.msg || e?.message || '读取失败'
+      setViewer((v) => (v ? { ...v, loading: false, error: String(msg) } : v))
+    }
+  }
+
+  const openFileView = async (p) => {
+    const seq = ++viewerSeq.current
+    setViewer({
+      kind: 'file',
+      title: `compose 原文 · ${p.name}`,
+      subtitle: p.configFiles?.[0] || '',
+      loading: true,
+      error: '',
+      content: '',
+      containerId: p.services?.[0]?.id,
+    })
+    try {
+      const r = await containerAPI.getComposeFile(p.services?.[0]?.id)
+      if (viewerSeq.current !== seq) return
+      if (okCode(r)) {
+        const d = r.data.data || {}
+        const parts = Object.entries(d.files || {}).map(([f, c]) => `# ── ${f} ──\n${c}`)
+        const errs = Object.entries(d.errors || {}).map(([f, e2]) => `# ── ${f} ──\n（读取失败：${e2}）`)
+        setViewer((v) => (v ? { ...v, loading: false, content: [...parts, ...errs].join('\n\n') } : v))
+      } else {
+        setViewer((v) => (v ? { ...v, loading: false, error: r.data.msg || '读取失败' } : v))
+      }
+    } catch (e) {
+      if (viewerSeq.current !== seq) return
+      const msg =
+        typeof e?.response?.data === 'string' && e.response.data
+          ? e.response.data
+          : e?.response?.data?.msg || e?.message || '读取失败'
+      setViewer((v) => (v ? { ...v, loading: false, error: String(msg) } : v))
+    }
+  }
+
+  const openLogsView = (svc) => {
+    const seq = ++viewerSeq.current
+    setViewer({
+      kind: 'logs',
+      title: `日志 · ${svc.service}`,
+      subtitle: svc.name,
+      loading: true,
+      error: '',
+      content: '',
+      containerId: svc.id,
+    })
+    fetchLogs(seq, svc.id)
+  }
+
+  const refreshLogs = () => {
+    if (!viewer?.containerId) return
+    const seq = ++viewerSeq.current
+    setViewer((v) => (v ? { ...v, loading: true, error: '', content: '' } : v))
+    fetchLogs(seq, viewer.containerId)
   }
 
   const saveRoots = async () => {
@@ -676,10 +836,19 @@ export function Compose() {
             <span className="w-4 flex-shrink-0" />
           </div>
           {shownProjects.map((p) => (
-            <ProjectRow key={p.name} project={p} />
+            <ProjectRow key={p.name} project={p} onViewFile={openFileView} onViewLogs={openLogsView} />
           ))}
         </div>
       )}
+      {viewer && (
+        <CodeViewer
+          viewer={viewer}
+          onClose={closeViewer}
+          onRefresh={refreshLogs}
+          onCopy={() => copyText(viewer.content || '', 'viewer')}
+        />
+      )}
+
     </div>
   )
 }
