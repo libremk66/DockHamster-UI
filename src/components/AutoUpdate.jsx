@@ -353,6 +353,11 @@ export function AutoUpdate() {
               {status?.nextAutoAt && (
                 <span className="ml-2 text-primary-600 dark:text-primary-400">下次自动更新：{status.nextAutoAt.slice(5)}</span>
               )}
+              {settings.notifyBeforeUpdate && status?.nextNoticeAt && (
+                <span className="ml-2 text-gray-500 dark:text-gray-400">
+                  预告 {status.nextNoticeAt.slice(5)} 发出（提前 {settings.notifyBeforeUpdateLeadMin || 10} 分钟）
+                </span>
+              )}
               <span className="ml-2">（检查更新频率已挪到「容器」页）</span>
             </p>
             <div className="pt-2 border-t border-gray-100 dark:border-gray-700/60 space-y-2">
