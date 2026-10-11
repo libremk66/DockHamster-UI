@@ -421,6 +421,19 @@ export function Compose() {
                   两边各改各的、无人对账 → 时间一长就对不上，文件不再可信。以"上次创建的记录"为准更新，等于把这些偏差当作标准继续沿用。
                 </p>
               </div>
+              <div className="space-y-1 pt-1">
+                <div className="font-semibold text-gray-900 dark:text-white">这个页面我不做设置行不行？</div>
+                <ul className="list-disc pl-4 space-y-1 text-gray-700 dark:text-gray-300">
+                  <li>
+                    <b>行。</b>这一页是"增强"，不是"必须"。完全不管它，更新也照常工作——镜像照常更新到最新，只是重建时配置以容器现状为准。
+                  </li>
+                  <li>
+                    只有两种情况值得回来做设置：① 你以后会在 compose 文件里改东西（端口 / 环境变量 / 版本），希望改了就生效；
+                    ② 发现文件与实际运行的容器已经对不上，想让它们恢复一致。
+                  </li>
+                  <li>从不改 compose 文件、也不在意这些的用户：<b>不需要动这一页，什么都不会坏。</b></li>
+                </ul>
+              </div>
             </div>
             <button className="btn-secondary whitespace-nowrap flex-shrink-0" onClick={dismissIntro}>
               知道了
