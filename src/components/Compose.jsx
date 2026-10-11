@@ -517,10 +517,10 @@ export function Compose() {
     return d?.msg || e?.message || '导出失败'
   }
 
-  const exportConfigs = async (project) => {
+  const exportConfigs = async (project, password) => {
     setMsg(null)
     try {
-      const r = project ? await projectAPI.exportOne(project) : await projectAPI.exportAll()
+      const r = await projectAPI.exportZip(project, password)
       const name = project
         ? `dockhamster-compose-${project.replace(/[^A-Za-z0-9._-]+/g, '_')}-${tsName()}.zip`
         : `dockhamster-compose-${tsName()}.zip`
@@ -529,6 +529,17 @@ export function Compose() {
     } catch (e) {
       setMsg({ type: 'err', text: await blobErrMsg(e) })
     }
+  }
+
+  // 导出弹窗（可选密码）：点导出先弹小窗，密码留空 = 不加密
+  const [exportFor, setExportFor] = useState(null) // {project: ''|名}
+  const [exportPwd, setExportPwd] = useState('')
+  const doExport = async () => {
+    const project = exportFor?.project || ''
+    const pwd = exportPwd
+    setExportFor(null)
+    setExportPwd('')
+    await exportConfigs(project, pwd)
   }
 
   // ── WebDAV 自动备份 ──
@@ -655,7 +666,7 @@ export function Compose() {
               页面说明
             </button>
           )}
-          <button className="btn-secondary" onClick={() => exportConfigs('')} title="打包下载全部可读项目的 compose 配置（含 .env）">
+          <button className="btn-secondary" onClick={() => setExportFor({ project: '' })} title="打包下载全部可读项目的 compose 配置（含 .env；可设密码加密）">
             <Download className="h-4 w-4 mr-1.5" />
             导出配置
           </button>
@@ -984,7 +995,21 @@ export function Compose() {
                   onChange={(e) => setBk({ ...bk, keep: +e.target.value || 7 })}
                 />
               </label>
+              <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
+                <span>备份包加密密码（可选）</span>
+                <input
+                  className="input text-sm"
+                  type="password"
+                  placeholder="留空 = 不加密"
+                  value={bk.zipPassword || ''}
+                  onChange={(e) => setBk({ ...bk, zipPassword: e.target.value })}
+                />
+              </label>
             </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              填了密码则备份包 AES-256 加密（解开：Linux <code className="font-mono">7z x 包名.zip</code>、Windows 用 7-Zip）——
+              适合备份包含 .env（可能有密码/密钥）的场景。
+            </p>
             <div className="flex items-center gap-2 flex-wrap">
               <Switch checked={!!bk.enabled} onChange={(v) => setBk({ ...bk, enabled: v })} />
               <span className="text-xs text-gray-600 dark:text-gray-400">开启自动备份</span>
@@ -1104,10 +1129,49 @@ export function Compose() {
             <span className="w-4 flex-shrink-0" />
           </div>
           {shownProjects.map((p) => (
-            <ProjectRow key={p.name} project={p} onViewFile={openFileView} onViewLogs={openLogsView} onExport={(proj) => exportConfigs(proj.name)} />
+            <ProjectRow key={p.name} project={p} onViewFile={openFileView} onViewLogs={openLogsView} onExport={(proj) => setExportFor({ project: proj.name })} />
           ))}
         </div>
       )}
+      {exportFor !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setExportFor(null)} />
+          <div className="relative card w-full max-w-md p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Download className="h-4 w-4 text-primary-500" />
+              <span className="font-semibold text-sm text-gray-900 dark:text-white">
+                导出配置{exportFor.project ? ` · ${exportFor.project}` : '（全部可读项目）'}
+              </span>
+            </div>
+            <label className="block text-xs text-gray-600 dark:text-gray-400 space-y-1">
+              <span>加密密码（可选；留空 = 不加密）</span>
+              <input
+                className="input text-sm"
+                type="password"
+                autoFocus
+                placeholder="留空直接导出"
+                value={exportPwd}
+                onChange={(e) => setExportPwd(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') doExport()
+                }}
+              />
+            </label>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              填密码则打包为 AES-256 加密 zip（解压：Linux 用 <code className="font-mono">7z x</code>、Windows 用 7-Zip 打开）。
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setExportFor(null)}>
+                取消
+              </button>
+              <button className="btn-primary" onClick={doExport}>
+                导出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {viewer && (
         <CodeViewer
           viewer={viewer}

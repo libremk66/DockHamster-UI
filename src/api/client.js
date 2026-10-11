@@ -209,10 +209,13 @@ export const autoUpdateAPI = {
 export const projectAPI = {
   list: () => apiClient.get('/api/projects', { timeout: 20000 }),
   saveRoots: (roots) => apiClient.post('/api/projects/roots', { roots: roots || [] }),
-  // 导出配置（zip 附件；鉴权走请求头，所以用 blob 下载）
-  exportAll: () => apiClient.get('/api/projects/export', { responseType: 'blob', timeout: 60000 }),
-  exportOne: (name) =>
-    apiClient.get('/api/projects/export', { params: { project: name }, responseType: 'blob', timeout: 60000 }),
+  // 导出配置（zip 附件，POST：密码走 body 不出现在 URL；blob 下载）
+  exportZip: (project, password) =>
+    apiClient.post(
+      '/api/projects/export',
+      { project: project || '', password: password || '' },
+      { responseType: 'blob', timeout: 60000 }
+    ),
 }
 
 // Compose 配置自动备份（WebDAV）
