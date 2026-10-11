@@ -106,16 +106,7 @@ function Switch({ checked, onChange, disabled = false }) {
   )
 }
 
-// 时间 ↔ cron（备份计划按"每天 HH:MM"呈现；后端存标准 5 段 cron）
 const pad2 = (n) => String(n).padStart(2, '0')
-const cronToTime = (cron) => {
-  const m = String(cron || '').match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/)
-  return m ? `${pad2(+m[2])}:${pad2(+m[1])}` : ''
-}
-const timeToCron = (t) => {
-  const [h, m] = String(t || '03:00').split(':')
-  return `${+m || 0} ${+h || 3} * * *`
-}
 const tsName = () => {
   const d = new Date()
   return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`
@@ -344,7 +335,7 @@ export function Compose() {
   const [viewer, setViewer] = useState(null)
   const viewerSeq = useRef(0)
   const [bk, setBk] = useState(null)           // 备份设置（服务端 get 后填充）
-  const [bkTime, setBkTime] = useState('03:00') // 每天备份时间（HH:MM）
+
   const [bkBusy, setBkBusy] = useState('')      // '' | test | save | run
   const [bkMsg, setBkMsg] = useState(null)      // {type:'ok'|'err', text}
   const [showIntro, setShowIntro] = useState(() => {
@@ -548,7 +539,6 @@ export function Compose() {
       const r = await composeBackupAPI.getSettings()
       if (okCode(r)) {
         setBk(r.data.data)
-        setBkTime(cronToTime(r.data.data?.cron) || '03:00')
       }
     } catch {
       /* 静默：备份设置拿不到不影响主视图 */
@@ -580,7 +570,7 @@ export function Compose() {
     setBkBusy('save')
     setBkMsg(null)
     try {
-      const r = await composeBackupAPI.saveSettings({ ...bk, cron: timeToCron(bkTime) })
+      const r = await composeBackupAPI.saveSettings(bk)
       if (okCode(r)) {
         setBk(r.data.data)
         setBkMsg({ type: 'ok', text: '已保存' })
@@ -935,14 +925,14 @@ export function Compose() {
           <summary className="cursor-pointer select-none text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
             <CloudUpload className="h-4 w-4 text-gray-400" />
             <span>自动备份到 WebDAV</span>
-            {bk.enabled && <span className="badge-success">已开启 · 每天 {bkTime}</span>}
+            {bk.enabled && <span className="badge-success">已开启 · {bk.cron || '0 3 * * *'}</span>}
             {bk.lastRun &&
               (bk.lastOk ? <span className="badge-success">最近成功</span> : <span className="badge-error">最近失败</span>)}
           </summary>
           <div className="mt-3 space-y-3">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               把「可读」项目的 compose 配置（含同目录 .env，原样打包）按计划上传到你的 WebDAV——
-              群晖 / 坚果云 / Nextcloud / Alist 等均可。备份结果的通知开关在「自动更新」页的通知区（失败默认通知）。
+              群晖 / 坚果云 / Nextcloud / Alist 等均可。备份结果的通知开关在「自动更新」页的通知区（失败默认通知）。备份计划用标准 cron 表达式（如 0 3 * * * 每天 03:00）。
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
@@ -981,8 +971,14 @@ export function Compose() {
                 />
               </label>
               <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
-                <span>每天备份时间</span>
-                <input className="input text-sm" type="time" value={bkTime} onChange={(e) => setBkTime(e.target.value)} />
+                <span>备份计划（cron，标准 5 段）</span>
+                <input
+                  className="input font-mono text-sm"
+                  placeholder="0 3 * * *"
+                  title="标准 5 段 cron：分 时 日 月 周。例：0 3 * * * = 每天 03:00；0 */6 * * * = 每 6 小时；0 3 * * 1 = 每周一 03:00"
+                  value={bk.cron || ''}
+                  onChange={(e) => setBk({ ...bk, cron: e.target.value })}
+                />
               </label>
               <label className="text-xs text-gray-600 dark:text-gray-400 space-y-1 block">
                 <span>远端保留份数</span>
