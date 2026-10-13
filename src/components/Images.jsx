@@ -193,26 +193,31 @@ export function Images() {
       setIsLoading(true)
       setError(null)
 
-      // 候选筛选：正在被容器使用、或被本地镜像依赖的，都不能删（daemon 会直接拒绝，且一个失败会拖垮整批）
-      const isUntagged = (img) => img.tag === 'None' || img.tag === '<none>'
-      let imagesToDelete = []
-      let skippedInUse = 0
-      let skippedChildren = 0
+      // 无Tag：交给后端循环清理。删掉叶子后其父层才降级成叶子，一轮清不完（Docker 不把中间层算作悬空）
       if (type === 'dangling') {
-        const candidates = images.filter(isUntagged)
-        imagesToDelete = candidates.filter(img => !img.inUsed && !img.hasChildren)
-        skippedInUse = candidates.filter(img => img.inUsed).length
-        skippedChildren = candidates.filter(img => !img.inUsed && img.hasChildren).length
-      } else if (type === 'unused') {
-        const candidates = images.filter(img => !img.inUsed)
-        imagesToDelete = candidates.filter(img => !img.hasChildren)
-        skippedChildren = candidates.filter(img => img.hasChildren).length
+        const r = await imageAPI.pruneDangling()
+        if (r.data?.code !== 200) {
+          setError(r.data?.msg || '清理镜像失败')
+          setIsLoading(false)
+          return
+        }
+        const { removed = 0, skipped = 0, rounds = 0 } = r.data.data || {}
+        const notes = skipped > 0 ? `，${skipped} 个被本地镜像依赖已跳过` : ''
+        const message = `成功清理 ${removed} 个无Tag镜像（共 ${rounds} 轮${notes}）`
+        setSuccessModal({ isOpen: true, message })
+        fetchImages()
+        setTimeout(() => setSuccessModal({ isOpen: false, message: '' }), 3000)
+        return
       }
+
+      // 候选筛选：无容器引用且无子镜像依赖（后者 daemon 会直接拒绝，且一个失败会拖垮整批）
+      const candidates = images.filter(img => !img.inUsed)
+      const imagesToDelete = candidates.filter(img => !img.hasChildren)
+      const skippedChildren = candidates.filter(img => img.hasChildren).length
       if (imagesToDelete.length === 0) {
-        const why = []
-        if (skippedInUse > 0) why.push(`${skippedInUse} 个正被容器使用`)
-        if (skippedChildren > 0) why.push(`${skippedChildren} 个被本地镜像依赖`)
-        setError(why.length > 0 ? `没有可清理的镜像（${why.join('、')}，已跳过）` : '没有找到需要清理的镜像')
+        setError(skippedChildren > 0
+          ? `没有可清理的镜像（${skippedChildren} 个被本地镜像依赖，已跳过）`
+          : '没有找到需要清理的镜像')
         setIsLoading(false)
         return
       }
@@ -224,12 +229,9 @@ export function Images() {
       const failed = results.filter(r => r.status === 'rejected').length
       const succeeded = results.length - failed
 
-      const base = type === 'dangling'
-        ? `成功清理 ${succeeded} 个无Tag镜像`
-        : `成功清理 ${succeeded} 个未使用的镜像`
+      const base = `成功清理 ${succeeded} 个未使用的镜像`
       const notes = []
       if (failed > 0) notes.push(`${failed} 个删除失败`)
-      if (skippedInUse > 0) notes.push(`${skippedInUse} 个正被容器使用已跳过`)
       if (skippedChildren > 0) notes.push(`${skippedChildren} 个被本地镜像依赖已跳过`)
       const message = notes.length > 0 ? `${base}（${notes.join('，')}）` : base
 
@@ -318,10 +320,10 @@ export function Images() {
             </button>
             <button
               onClick={() => {
-                const imagesToDelete = images.filter(img => (img.tag === 'None' || img.tag === '<none>') && !img.inUsed && !img.hasChildren)
-                setPruneModal({ isOpen: true, type: 'dangling', images: imagesToDelete })
+                // 列表里的无Tag可能只是清理链的叶子，实际可删项由后端循环判定，这里带全部无Tag进确认框
+                setPruneModal({ isOpen: true, type: 'dangling', images: images.filter(isDanglingImage) })
               }}
-              disabled={isLoading || images.filter(img => (img.tag === 'None' || img.tag === '<none>') && !img.inUsed && !img.hasChildren).length === 0}
+              disabled={isLoading || images.filter(isDanglingImage).length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors disabled:opacity-50 text-sm font-medium"
             >
               <BrushCleaning className="h-4 w-4" />
@@ -794,8 +796,15 @@ export function Images() {
                     {pruneModal.type === 'dangling' ? '删除无Tag镜像' : '删除未使用的镜像'}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    将永久删除 <span className="font-semibold text-orange-600 dark:text-orange-400">{pruneModal.images.length} 个</span> 镜像，此操作不可恢复
+                    {pruneModal.type === 'dangling'
+                      ? <>清理当前 <span className="font-semibold text-orange-600 dark:text-orange-400">{pruneModal.images.length} 个</span> 无Tag镜像，被其它镜像依赖的构建中间层自动跳过；此操作不可恢复</>
+                      : <>将永久删除 <span className="font-semibold text-orange-600 dark:text-orange-400">{pruneModal.images.length} 个</span> 镜像，此操作不可恢复</>}
                   </p>
+                  {pruneModal.type === 'dangling' && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                      会连带清掉本地构建的中间层（构建缓存），下次本地构建会变慢
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

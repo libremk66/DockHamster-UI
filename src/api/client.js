@@ -127,6 +127,8 @@ export const imageAPI = {
   getImages: () => apiClient.get('/api/images'),
   getIcons: () => apiClient.get('/api/icons'),
   deleteImage: (id, force = false) => apiClient.delete(`/api/image/${id}?force=${force}`),
+  // 清理无Tag镜像：服务端循环删到无可删项（删掉叶子后其父层降级成叶子，一轮清不完）
+  pruneDangling: () => apiClient.post('/api/image/prune', {}, { timeout: 300000 }),
   uploadIcon: (file, imageName, containerName) => {
     const formData = new FormData()
     formData.append('file', file)
