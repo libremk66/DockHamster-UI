@@ -223,7 +223,7 @@ export function Containers() {
       setConfirmModal({
         isOpen: true,
         title: '检查更新完成',
-        message: `已检查 ${st.checked || 0} 个镜像，发现 ${st.needUpdate || 0} 个有新版本`,
+        message: `已检查 ${st.checked || 0} 个镜像，发现 ${st.needUpdate || 0} 个有新版本，涉及 ${st.affectedContainers || 0} 个容器`,
         onConfirm: () => setConfirmModal({ isOpen: false }),
         onCancel: () => setConfirmModal({ isOpen: false }),
         type: (st.needUpdate || 0) > 0 ? 'warning' : 'info',
