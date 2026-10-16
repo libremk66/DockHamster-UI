@@ -118,6 +118,17 @@ function AppContent() {
     return () => window.removeEventListener('dh:navigate', onNavigate)
   }, [])
 
+  // URL hash 路由：支持 #images 等直链/刷新保留（初始读取 + hashchange 同步）
+  useEffect(() => {
+    const applyHash = () => {
+      const h = window.location.hash
+      if (h && h !== '#') setActiveTab(h)
+    }
+    applyHash()
+    window.addEventListener('hashchange', applyHash)
+    return () => window.removeEventListener('hashchange', applyHash)
+  }, [])
+
   const handleLogin = () => {
     setIsAuthenticated(true)
     // 触发自定义事件通知其他组件认证状态已更新

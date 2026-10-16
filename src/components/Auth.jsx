@@ -68,6 +68,7 @@ export function Auth({ onLogin }) {
                 name="secretKey"
                 type={showPassword ? 'text' : 'password'}
                 required
+                autoComplete="current-password"
                 className="input pl-10 pr-10"
                 placeholder="请输入您的密钥"
                 value={secretKey}

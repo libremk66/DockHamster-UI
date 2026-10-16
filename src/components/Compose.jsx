@@ -45,6 +45,12 @@ const STATE_META = {
     icon: AlertTriangle,
     tip: '面板读不到 compose 文件 → 更新时镜像照常换新，但配置只能照抄容器现状：以后在文件里改的东西不会生效；按页面顶部的挂载引导挂上目录即可升级',
   },
+  fileMissing: {
+    text: '文件不存在',
+    cls: 'badge-warning',
+    icon: AlertTriangle,
+    tip: '面板能看到文件所在目录，但 compose 文件不在了（多半已被删除或移动）→ 挂载帮不上忙，请确认文件是否还在原位置',
+  },
   noFile: {
     text: '无文件记录',
     cls: 'badge-info',
@@ -57,6 +63,7 @@ const STATE_META = {
 // 注意说法：镜像都会更新，差别在"重建容器时配置以谁为准"
 const UPDATE_HINT = {
   needsMount: '更新方式：镜像照常更新，但配置照抄容器现状——在 compose 文件里改的东西不会生效',
+  fileMissing: '更新方式：镜像照常更新，配置照抄容器现状（compose 文件已不存在）',
   noFile: '更新方式：镜像照常更新，配置照抄容器现状',
 }
 
@@ -312,6 +319,12 @@ function ProjectRow({ project: p, onViewFile, onViewLogs, onExport }) {
               <span className="text-yellow-700 dark:text-yellow-300">
                 {' '}
                 · 需要挂载 <code className="font-mono">{p.mountHint}</code>
+              </span>
+            )}
+            {p.state === 'fileMissing' && p.configFiles?.length > 0 && (
+              <span className="text-yellow-700 dark:text-yellow-300">
+                {' '}
+                · 面板在找 <code className="font-mono">{p.configFiles[0]}</code>（确认文件是否还在）
               </span>
             )}
           </div>
@@ -627,6 +640,7 @@ export function Compose() {
   const serviceCount = projects.reduce((n, p) => n + (p.services?.length || 0), 0)
   const readableCount = projects.filter((p) => p.state === 'readable').length
   const needMountCount = projects.filter((p) => p.state === 'needsMount').length
+  const fileMissingCount = projects.filter((p) => p.state === 'fileMissing').length
   const noFileCount = projects.filter((p) => p.state === 'noFile').length
   const shownProjects = filter === 'all' ? projects : projects.filter((p) => p.state === filter)
 
@@ -1066,6 +1080,11 @@ export function Compose() {
           {needMountCount > 0 && (
             <FilterChip tone="warning" active={filter === 'needsMount'} onClick={() => setFilter('needsMount')}>
               需挂载 {needMountCount}
+            </FilterChip>
+          )}
+          {fileMissingCount > 0 && (
+            <FilterChip tone="warning" active={filter === 'fileMissing'} onClick={() => setFilter('fileMissing')}>
+              文件不存在 {fileMissingCount}
             </FilterChip>
           )}
           {noFileCount > 0 && (

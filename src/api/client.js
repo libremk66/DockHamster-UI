@@ -127,6 +127,9 @@ export const imageAPI = {
   getImages: () => apiClient.get('/api/images'),
   getIcons: () => apiClient.get('/api/icons'),
   deleteImage: (id, force = false) => apiClient.delete(`/api/image/${id}?force=${force}`),
+  // 构建中间层（无标签、无引用；镜像列表默认隐藏，daemon 层面才能清理）
+  getIntermediateStat: () => apiClient.get('/api/image/intermediateStat'),
+  pruneIntermediate: () => apiClient.post('/api/image/prune/intermediate'),
   uploadIcon: (file, imageName, containerName) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -143,6 +146,12 @@ export const imageAPI = {
 // 进度查询API
 export const progressAPI = {
   getProgress: (taskid) => apiClient.get(`/api/progress/${taskid}`),
+}
+
+// 资源清理API（未使用卷/网络）
+export const resourcesAPI = {
+  getUnused: () => apiClient.get('/api/resources/unused'),
+  prune: (payload) => apiClient.post('/api/resources/prune', payload),
 }
 
 // 容器 Web 界面 favicon 解析（概览页快捷导航用）

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search, History, ShieldCheck, Zap } from 'lucide-react'
-import { imageAPI, autoUpdateAPI, containerAPI } from '../api/client.js'
+import { imageAPI, autoUpdateAPI, containerAPI, resourcesAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 import { CheckUpdateButton } from './CheckUpdateButton.jsx'
+import { Resources } from './Resources.jsx'
 import { AcceleratorPanel, AcceleratorPullModal } from './Accelerator.jsx'
 import { getImageLogo } from '../config/imageLogos.js'
 
@@ -43,6 +44,11 @@ export function Images() {
   const [searchQuery, setSearchQuery] = useState('')
   const [pruneModal, setPruneModal] = useState({ isOpen: false, type: null, images: [] })
   const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' })
+  // 构建中间层（镜像列表默认隐藏的层；面板提供清理入口）
+  const [interStat, setInterStat] = useState(null)
+  // 资源清理（未使用卷/网络）计数，显示在统计卡上
+  const [resourceCount, setResourceCount] = useState(0)
+  const [interPruneModal, setInterPruneModal] = useState({ isOpen: false, loading: false })
   // 快照（旧镜像回滚）
   const [snapshots, setSnapshots] = useState([])
   const [containers, setContainers] = useState([])
@@ -106,6 +112,52 @@ export function Images() {
     }
   }
 
+  const fetchResourceCount = async () => {
+    try {
+      const r = await resourcesAPI.getUnused()
+      if (r.data?.code === 200) {
+        const d = r.data.data || {}
+        setResourceCount((d.anonymousVolumes?.length || 0) + (d.projectVolumes?.length || 0) + (d.networks?.length || 0))
+      }
+    } catch (e) { /* 老后端忽略 */ }
+  }
+
+  // 构建中间层统计（老后端没有这个接口时静默降级）
+  const fetchIntermediateStat = async () => {
+    try {
+      const r = await imageAPI.getIntermediateStat()
+      if (r.data?.code === 200) {
+        setInterStat(r.data.data || null)
+      }
+    } catch (e) { /* 老后端忽略 */ }
+  }
+
+  // 清理构建中间层（daemon 级联通道，默认只清 24 小时前的无标签无引用层）
+  const handlePruneIntermediate = async () => {
+    try {
+      setInterPruneModal(m => ({ ...m, loading: true }))
+      const r = await imageAPI.pruneIntermediate()
+      setInterPruneModal({ isOpen: false, loading: false })
+      if (r.data?.code === 200) {
+        const d = r.data.data || {}
+        setSuccessModal({
+          isOpen: true,
+          message: d.deleted > 0
+            ? `已清理 ${d.deleted} 个构建中间层，回收 ${d.spaceText || '0 B'} 空间`
+            : `没有可清理的中间层${interStat?.inUse > 0 ? `（${interStat.inUse} 个正被容器使用已跳过）` : '（可能都还没超过 24 小时）'}`,
+        })
+        fetchImages()
+        fetchIntermediateStat()
+        setTimeout(() => setSuccessModal({ isOpen: false, message: '' }), 5000)
+      } else {
+        setError(r.data?.msg || '清理失败')
+      }
+    } catch (e) {
+      setInterPruneModal({ isOpen: false, loading: false })
+      setError(e.response?.data?.msg || e.message || '清理失败')
+    }
+  }
+
   const fetchSnapshots = async () => {
     try {
       const [snap, c] = await Promise.all([autoUpdateAPI.getSnapshots(), containerAPI.getContainers()])
@@ -117,6 +169,8 @@ export function Images() {
   useEffect(() => {
     fetchImages()
     fetchSnapshots()
+    fetchIntermediateStat()
+    fetchResourceCount()
   }, [])
 
   // 快照对应的候选容器（按快照名匹配容器名或镜像短名）
@@ -423,7 +477,7 @@ export function Images() {
 
       {/* 统计信息 */}
       <div className="px-2 sm:px-6 py-4">
-        <div className="grid grid-cols-5 gap-0 rounded-3xl overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="grid grid-cols-3 lg:grid-cols-6 gap-0 rounded-3xl overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           {/* 总镜像数 */}
           <button
             onClick={() => setFilterStatus(null)}
@@ -508,11 +562,35 @@ export function Images() {
               <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">无Tag</div>
             </div>
           </button>
+
+          {/* 资源清理（未使用卷/网络；点开进入清理视图） */}
+          <button
+            onClick={() => setFilterStatus('resources')}
+            className={cn(
+              "p-3 sm:p-5 text-center transition-all duration-300 relative overflow-hidden group border-l border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center",
+              filterStatus === 'resources' ? "bg-teal-50 dark:bg-teal-900/20" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+            )}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="relative">
+              <div className="text-2xl sm:text-3xl font-bold text-teal-600 dark:text-teal-400 transition-transform duration-300 group-hover:scale-110">
+                {resourceCount}
+              </div>
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">资源清理</div>
+            </div>
+          </button>
         </div>
       </div>
 
+      {/* 资源清理视图（未使用卷/网络）：选中「资源清理」卡时整块替换列表 */}
+      {filterStatus === 'resources' && (
+        <div className="px-2 sm:px-6 pb-6">
+          <Resources onClose={() => setFilterStatus(null)} onDone={fetchResourceCount} />
+        </div>
+      )}
+
       {/* 筛选提示 */}
-      {filterStatus && (
+      {filterStatus && filterStatus !== 'resources' && (
         <div className="px-4 sm:px-6 pt-2 pb-0">
           <div className="mb-0 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <div className="flex items-center gap-2">
@@ -521,7 +599,7 @@ export function Images() {
                 {filterStatus === 'used' && '使用中的镜像'}
                 {filterStatus === 'unused' && '未使用的镜像'}
                 {filterStatus === 'snapshot' && '镜像快照（更新前旧版本，可回滚）'}
-                {filterStatus === 'dangling' && '无Tag的镜像'}
+                {filterStatus === 'dangling' && '无Tag的镜像（列表可见的部分）'}
               </span>
               <button
                 onClick={() => setFilterStatus(null)}
@@ -534,249 +612,273 @@ export function Images() {
         </div>
       )}
 
-      {/* 镜像列表 */}
-      <div className="px-2 sm:px-6 py-4">
-        {images.length > 0 && (
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="text-xs text-gray-400 dark:text-gray-500">
-              {filterStatus === 'snapshot'
-                ? `共 ${snapshots.length} 个快照`
-                : visibleImages.length === images.length
-                  ? `共 ${images.length} 个镜像`
-                  : `筛选出 ${visibleImages.length} / ${images.length} 个镜像`}
-            </span>
-            <CheckUpdateButton onDone={onCheckDone} />
-            {filterStatus === 'snapshot' && snapshots.length > 0 && (
-              <button
-                onClick={pruneSnapshots}
-                className="px-2.5 py-1.5 rounded-lg border text-xs font-medium text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors ml-2"
-                title="按保留数量清理过期快照"
-              >
-                清理过期快照
-              </button>
-            )}
-            <div className="relative w-56 max-w-[60%]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索镜像…"
-                className="w-full pl-8 pr-8 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
-              />
-              {searchQuery && (
+      {/* 构建中间层提示（无Tag筛选中；这些层被 Docker 隐藏在镜像列表之外，只有 daemon 级清理能处理） */}
+      {filterStatus === 'dangling' && interStat && interStat.count > 0 && (
+        <div className="px-4 sm:px-6 pt-2 pb-0">
+          <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
+              <span className="text-sm text-orange-700 dark:text-orange-300">
+                另有 <span className="font-semibold">{interStat.count}</span> 个构建中间层（约 {interStat.sizeText}）不在上方列表中——它们是历史构建的中间产物，正在被容器使用或被依赖的不会被删
+              </span>
+            </div>
+            <button
+              onClick={() => setInterPruneModal({ isOpen: true, loading: false })}
+              className="px-2.5 py-1.5 rounded-lg border text-xs font-medium text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-700 bg-white dark:bg-gray-800 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors flex-shrink-0"
+            >
+              清理构建中间层
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 镜像列表（资源清理视图下隐藏） */}
+      {filterStatus !== 'resources' && (
+        <>
+        <div className="px-2 sm:px-6 py-4">
+          {images.length > 0 && (
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {filterStatus === 'snapshot'
+                  ? `共 ${snapshots.length} 个快照`
+                  : visibleImages.length === images.length
+                    ? `共 ${images.length} 个镜像`
+                    : `筛选出 ${visibleImages.length} / ${images.length} 个镜像`}
+              </span>
+              <CheckUpdateButton onDone={onCheckDone} />
+              {filterStatus === 'snapshot' && snapshots.length > 0 && (
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  title="清空搜索"
+                  onClick={pruneSnapshots}
+                  className="px-2.5 py-1.5 rounded-lg border text-xs font-medium text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors ml-2"
+                  title="按保留数量清理过期快照"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  清理过期快照
                 </button>
               )}
-            </div>
-          </div>
-        )}
-        {filterStatus === 'snapshot' ? (
-          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
-            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_110px_150px_170px_220px] gap-3 px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10">
-              <span>快照</span>
-              <span>大小</span>
-              <span>状态</span>
-              <span>时间</span>
-              <span className="text-right">操作</span>
-            </div>
-            {snapshots.length === 0 && (
-              <div className="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
-                还没有快照。开启「更新完成后打快照保留」后，更新前的旧镜像会自动留下快照。
+              <div className="relative w-56 max-w-[60%]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索镜像…"
+                  className="w-full pl-8 pr-8 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    title="清空搜索"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-            )}
-            {snapshots.map(sn => {
-              const cands = containersForSnapshot(sn)
-              return (
-                <div
-                  key={sn.ref}
-                  className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_150px_170px_220px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-amber-50/40 dark:hover:bg-amber-900/10 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                      <History className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white font-mono truncate">{sn.ref}</div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">
-                        sha256:{sn.shortId}{sn.usedBy?.length ? ` · 被 ${sn.usedBy.join('、')} 使用` : ''}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 lg:contents">
-                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                      {(sn.size / 1024 / 1024).toFixed(0)} MB
-                    </div>
-                    <div>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap inline-flex items-center gap-1">
-                        <ShieldCheck className="h-3 w-3" />受保护
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                      {sn.timeLabel || '—'}
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5 justify-end items-center">
-                    {cands.length > 0 && (
-                      <button
-                        onClick={() => setRollbackTarget({ containerName: cands[0].name, ref: sn.ref, candidates: cands })}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"
-                        title={`回滚容器 ${cands.map(c => c.name).join('、')} 到此快照`}
-                      >
-                        <History className="h-3.5 w-3.5" />回滚
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setDeleteModal({ isOpen: true, image: { id: sn.ref, name: sn.ref, force: true }, snapshotRef: sn.ref })}
-                      disabled={sn.inUse}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={sn.inUse ? '仍被容器使用，无法删除' : '删除此快照'}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />删除
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-            <div className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 bg-amber-50/40 dark:bg-amber-900/5">
-              快照是本地标签（独立命名空间），不参与「更新检测」，也不会被「自动清理旧镜像」删除；点击「回滚」可把容器恢复到该版本。
             </div>
-          </div>
-        ) : images.length === 0 ? (
-          <div className="card p-12 text-center rounded-2xl">
-            <HardDrive className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">暂无镜像</h3>
-            <p className="text-gray-500 dark:text-gray-400">您还没有任何Docker镜像</p>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
-            {/* 表头（桌面端） */}
-            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_110px_130px_170px_220px] gap-3 px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700/60 bg-gray-50/70 dark:bg-gray-900/20">
-              <span>镜像</span>
-              <span>大小</span>
-              <span>使用情况</span>
-              <span>创建时间</span>
-              <span className="text-right">操作</span>
-            </div>
-            {visibleImages.length === 0 && (
-              <div className="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
-                没有匹配的镜像（试试调整筛选条件或搜索关键字）
+          )}
+          {filterStatus === 'snapshot' ? (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+              <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_110px_150px_170px_220px] gap-3 px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10">
+                <span>快照</span>
+                <span>大小</span>
+                <span>状态</span>
+                <span>时间</span>
+                <span className="text-right">操作</span>
               </div>
-            )}
-            {visibleImages.map((image) => {
-              const dangling = isDanglingImage(image)
-              return (
-                <div
-                  key={image.id}
-                  className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_130px_170px_260px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors"
-                >
-                  {/* ① 镜像 */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      <SafeImage
-                        src={getImageLogo(image.name, customIcons)}
-                        alt={image.name}
-                        className="h-10 w-10 object-cover"
-                        fallback={<HardDrive className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className={cn(
-                        "text-sm font-semibold truncate",
-                        dangling ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"
-                      )}>
-                        {formatImageRef(image)}
-                      </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">
-                        sha256:{shortImageId(image.id)}{dangling ? ' · 无标签（悬空）' : ''}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 移动端横排；桌面端展开为三列 */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 lg:contents">
-                    {/* ② 大小 */}
-                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                      {formatImageSize(image.size)}
-                    </div>
-                    {/* ③ 使用情况 */}
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {image.inUsed
-                        ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-medium whitespace-nowrap">使用中</span>
-                        : <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 font-medium whitespace-nowrap">未使用</span>}
-                      {image.tags?.length > 1 && (
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 font-medium whitespace-nowrap"
-                          title={`该镜像被 ${image.tags.length} 个标签引用，删除时一并解除：\n${image.tags.join('\n')}`}
-                        >
-                          {image.tags.length} 个标签
-                        </span>
-                      )}
-                      {image.hasChildren && (
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap"
-                          title="被本地构建的镜像作为基础镜像依赖，无法删除"
-                        >
-                          被镜像依赖
-                        </span>
-                      )}
-                    </div>
-                    {/* ④ 创建时间 */}
-                    <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                      {image.createTime || '—'}
-                    </div>
-                  </div>
-
-                  {/* ⑤ 操作 */}
-                  <div className="flex gap-1.5 justify-end items-center">
-                    {!dangling && isDockerHubImage(image.name) && (
-                      <button
-                        onClick={() => setPullModal({ isOpen: true, image })}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-amber-600 dark:text-amber-400 border-gray-200 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                        title="通过加速源重新拉取（更新此镜像）"
-                      >
-                        <Zap className="h-3.5 w-3.5" />加速拉取
-                      </button>
-                    )}
-                    <a
-                      href={`https://hub.docker.com/r/${image.name}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-primary-200 dark:hover:border-primary-800 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"
-                      title="在Docker Hub查看"
-                    >
-                      <Link className="h-3.5 w-3.5" />Hub
-                    </a>
-                    <button
-                      onClick={() => setDeleteModal({ isOpen: true, image, force: false })}
-                      disabled={image.hasChildren}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                      title={image.hasChildren ? '被本地构建镜像依赖，无法删除' : '删除'}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />删除
-                    </button>
-                    {image.inUsed && !image.hasChildren && (
-                      <button
-                        onClick={() => setDeleteModal({ isOpen: true, image, force: true })}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-orange-600 dark:text-orange-400 border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                        title="强制删除正在使用的镜像"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />强删
-                      </button>
-                    )}
-                  </div>
+              {snapshots.length === 0 && (
+                <div className="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+                  还没有快照。开启「更新完成后打快照保留」后，更新前的旧镜像会自动留下快照。
                 </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+              )}
+              {snapshots.map(sn => {
+                const cands = containersForSnapshot(sn)
+                return (
+                  <div
+                    key={sn.ref}
+                    className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_150px_170px_220px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-amber-50/40 dark:hover:bg-amber-900/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                        <History className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white font-mono truncate">{sn.ref}</div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">
+                          sha256:{sn.shortId}{sn.usedBy?.length ? ` · 被 ${sn.usedBy.join('、')} 使用` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 lg:contents">
+                      <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        {(sn.size / 1024 / 1024).toFixed(0)} MB
+                      </div>
+                      <div>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap inline-flex items-center gap-1">
+                          <ShieldCheck className="h-3 w-3" />受保护
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                        {sn.timeLabel || '—'}
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 justify-end items-center">
+                      {cands.length > 0 && (
+                        <button
+                          onClick={() => setRollbackTarget({ containerName: cands[0].name, ref: sn.ref, candidates: cands })}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                          title={`回滚容器 ${cands.map(c => c.name).join('、')} 到此快照`}
+                        >
+                          <History className="h-3.5 w-3.5" />回滚
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDeleteModal({ isOpen: true, image: { id: sn.ref, name: sn.ref, force: true }, snapshotRef: sn.ref })}
+                        disabled={sn.inUse}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={sn.inUse ? '仍被容器使用，无法删除' : '删除此快照'}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />删除
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 bg-amber-50/40 dark:bg-amber-900/5">
+                快照是本地标签（独立命名空间），不参与「更新检测」，也不会被「自动清理旧镜像」删除；点击「回滚」可把容器恢复到该版本。
+              </div>
+            </div>
+          ) : images.length === 0 ? (
+            <div className="card p-12 text-center rounded-2xl">
+              <HardDrive className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">暂无镜像</h3>
+              <p className="text-gray-500 dark:text-gray-400">您还没有任何Docker镜像</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+              {/* 表头（桌面端） */}
+              <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_110px_130px_170px_220px] gap-3 px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700/60 bg-gray-50/70 dark:bg-gray-900/20">
+                <span>镜像</span>
+                <span>大小</span>
+                <span>使用情况</span>
+                <span>创建时间</span>
+                <span className="text-right">操作</span>
+              </div>
+              {visibleImages.length === 0 && (
+                <div className="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+                  没有匹配的镜像（试试调整筛选条件或搜索关键字）
+                </div>
+              )}
+              {visibleImages.map((image) => {
+                const dangling = isDanglingImage(image)
+                return (
+                  <div
+                    key={image.id}
+                    className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_110px_130px_170px_260px] gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors"
+                  >
+                    {/* ① 镜像 */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        <SafeImage
+                          src={getImageLogo(image.name, customIcons)}
+                          alt={image.name}
+                          className="h-10 w-10 object-cover"
+                          fallback={<HardDrive className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className={cn(
+                          "text-sm font-semibold truncate",
+                          dangling ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"
+                        )}>
+                          {formatImageRef(image)}
+                        </div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">
+                          sha256:{shortImageId(image.id)}{dangling ? ' · 无标签（悬空）' : ''}
+                        </div>
+                      </div>
+                    </div>
 
+                    {/* 移动端横排；桌面端展开为三列 */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 lg:contents">
+                      {/* ② 大小 */}
+                      <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        {formatImageSize(image.size)}
+                      </div>
+                      {/* ③ 使用情况 */}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {image.inUsed
+                          ? <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-medium whitespace-nowrap">使用中</span>
+                          : <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 font-medium whitespace-nowrap">未使用</span>}
+                        {image.tags?.length > 1 && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 font-medium whitespace-nowrap"
+                            title={`该镜像被 ${image.tags.length} 个标签引用，删除时一并解除：\n${image.tags.join('\n')}`}
+                          >
+                            {image.tags.length} 个标签
+                          </span>
+                        )}
+                        {image.hasChildren && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap"
+                            title="被本地构建的镜像作为基础镜像依赖，无法删除"
+                          >
+                            被镜像依赖
+                          </span>
+                        )}
+                      </div>
+                      {/* ④ 创建时间 */}
+                      <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                        {image.createTime || '—'}
+                      </div>
+                    </div>
+
+                    {/* ⑤ 操作 */}
+                    <div className="flex gap-1.5 justify-end items-center">
+                      {!dangling && isDockerHubImage(image.name) && (
+                        <button
+                          onClick={() => setPullModal({ isOpen: true, image })}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-amber-600 dark:text-amber-400 border-gray-200 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                          title="通过加速源重新拉取（更新此镜像）"
+                        >
+                          <Zap className="h-3.5 w-3.5" />加速拉取
+                        </button>
+                      )}
+                      <a
+                        href={`https://hub.docker.com/r/${image.name}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-primary-200 dark:hover:border-primary-800 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                        title="在Docker Hub查看"
+                      >
+                        <Link className="h-3.5 w-3.5" />Hub
+                      </a>
+                      <button
+                        onClick={() => setDeleteModal({ isOpen: true, image, force: false })}
+                        disabled={image.hasChildren}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-red-600 dark:text-red-400 border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        title={image.hasChildren ? '被本地构建镜像依赖，无法删除' : '删除'}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />删除
+                      </button>
+                      {image.inUsed && !image.hasChildren && (
+                        <button
+                          onClick={() => setDeleteModal({ isOpen: true, image, force: true })}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-orange-600 dark:text-orange-400 border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                          title="强制删除正在使用的镜像"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />强删
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        </>
+      )}
       {/* 批量删除确认弹窗 */}
       {pruneModal.isOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
@@ -911,6 +1013,57 @@ export function Images() {
                 className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors"
               >
                 确认回滚
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 清理构建中间层确认弹窗 */}
+      {interPruneModal.isOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all duration-300 scale-100">
+            <div className="h-1 bg-gradient-to-r from-orange-400 via-amber-500 to-orange-600"></div>
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-start gap-4">
+                <div className="h-12 w-12 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30 rounded-full flex items-center justify-center flex-shrink-0 border border-orange-200 dark:border-orange-700">
+                  <HardDrive className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">清理构建中间层</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    将清理 <span className="font-semibold text-orange-600 dark:text-orange-400">{interStat?.count || 0} 个</span> 无标签、无引用的历史构建层（约 {interStat?.sizeText || '0 B'}）
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-gray-50/50 dark:bg-gray-700/20">
+              <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1.5 list-disc pl-4">
+                <li>只清理 24 小时前创建、且没有被容器使用、没有被其它镜像依赖的层</li>
+                <li>不会影响任何正在运行的容器和已有镜像</li>
+                <li>这些层是历史构建（如本地构建）的中间产物，清理后下次相同构建可能稍慢一点</li>
+              </ul>
+            </div>
+            <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700/50 flex gap-3">
+              <button
+                onClick={() => setInterPruneModal({ isOpen: false, loading: false })}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-300 transform hover:shadow-md active:scale-95 border border-gray-200 dark:border-gray-600"
+              >
+                取消
+              </button>
+              <button
+                onClick={handlePruneIntermediate}
+                disabled={interPruneModal.loading}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl transition-all duration-300 transform hover:shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              >
+                {interPruneModal.loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    清理中...
+                  </span>
+                ) : (
+                  '确认清理'
+                )}
               </button>
             </div>
           </div>
