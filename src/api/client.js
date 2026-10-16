@@ -130,6 +130,8 @@ export const imageAPI = {
   // 构建中间层（无标签、无引用；镜像列表默认隐藏，daemon 层面才能清理）
   getIntermediateStat: () => apiClient.get('/api/image/intermediateStat'),
   pruneIntermediate: () => apiClient.post('/api/image/prune/intermediate'),
+  // 清理无Tag镜像：服务端循环删到无可删项（删掉叶子后其父层降级成叶子，一轮清不完）
+  pruneDangling: () => apiClient.post('/api/image/prune', {}, { timeout: 300000 }),
   uploadIcon: (file, imageName, containerName) => {
     const formData = new FormData()
     formData.append('file', file)
