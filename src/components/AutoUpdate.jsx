@@ -172,7 +172,7 @@ export function AutoUpdate() {
   const onCheckDone = (st) => {
     setRefreshKey(k => k + 1)
     if (st && !st.running) {
-      setMsg({ type: 'ok', text: `检查完成：共 ${st.checked || 0} 个镜像，${st.needUpdate || 0} 个有新版本` })
+      setMsg({ type: 'ok', text: `检查完成：共 ${st.checked || 0} 个镜像，${st.needUpdate || 0} 个有新版本，涉及 ${st.affectedContainers || 0} 个容器` })
     }
   }
 

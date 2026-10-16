@@ -207,7 +207,7 @@ export function Images() {
   const onCheckDone = (st) => {
     fetchImages()
     if (st && !st.running) {
-      setSuccessModal({ isOpen: true, message: `已检查 ${st.checked || 0} 个镜像，发现 ${st.needUpdate || 0} 个有新版本` })
+      setSuccessModal({ isOpen: true, message: `已检查 ${st.checked || 0} 个镜像，发现 ${st.needUpdate || 0} 个有新版本，涉及 ${st.affectedContainers || 0} 个容器` })
     }
   }
 
