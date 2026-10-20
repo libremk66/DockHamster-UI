@@ -70,7 +70,14 @@ export function Resources({ onClose, onDone }) {
       const r = await resourcesAPI.prune(p)
       setPruneModal({ isOpen: false, kind: null, title: '', desc: '', payload: null, loading: false })
       if (r.data?.code === 200) {
-        setSuccessModal({ isOpen: true, message: r.data.msg || '清理完成' })
+        const d = r.data.data || {}
+        const failedNames = Object.keys(d.failed || {})
+        let message = r.data.msg || '清理完成'
+        if (failedNames.length > 0) {
+          const preview = failedNames.slice(0, 5).join('、')
+          message += `；${failedNames.length} 项未清理：${preview}${failedNames.length > 5 ? ' 等' : ''}`
+        }
+        setSuccessModal({ isOpen: true, message })
         fetchStat()
         onDone && onDone()
         setTimeout(() => setSuccessModal({ isOpen: false, message: '' }), 5000)
@@ -79,7 +86,11 @@ export function Resources({ onClose, onDone }) {
       }
     } catch (e) {
       setPruneModal(m => ({ ...m, loading: false }))
-      setError(e.response?.data?.msg || e.message || '清理失败')
+      if (e.code === 'ECONNABORTED') {
+        setError('请求超时：后端可能仍在清理，请刷新后核对结果')
+      } else {
+        setError(e.response?.data?.msg || e.message || '清理失败')
+      }
     }
   }
 

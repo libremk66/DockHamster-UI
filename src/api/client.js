@@ -111,11 +111,10 @@ export const containerAPI = {
   getComposeFile: (id) => apiClient.get(`/api/container/${id}/composefile`, { timeout: 15000 }),
   // 容器日志（纯文本，最近 200 行含时间戳）
   getLogs: (id) => apiClient.get(`/api/container/${id}/logs`, { timeout: 20000 }),
-  updateContainer: (id, containerName, imageNameAndTag, delOldContainer) => {
+  updateContainer: (id, containerName, imageNameAndTag) => {
     const formData = new FormData()
     formData.append('containerName', containerName)
     formData.append('imageNameAndTag', imageNameAndTag)
-    formData.append('delOldContainer', delOldContainer ? 'true' : 'false')
     return apiClient.post(`/api/container/${id}/update`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
@@ -129,7 +128,8 @@ export const imageAPI = {
   deleteImage: (id, force = false) => apiClient.delete(`/api/image/${id}?force=${force}`),
   // 构建中间层（无标签、无引用；镜像列表默认隐藏，daemon 层面才能清理）
   getIntermediateStat: () => apiClient.get('/api/image/intermediateStat'),
-  pruneIntermediate: () => apiClient.post('/api/image/prune/intermediate'),
+  // 后端允许 120s；前端留余量，避免层多时界面先报超时而后端仍在删
+  pruneIntermediate: () => apiClient.post('/api/image/prune/intermediate', {}, { timeout: 180000 }),
   // 清理无Tag镜像：服务端循环删到无可删项（删掉叶子后其父层降级成叶子，一轮清不完）
   pruneDangling: () => apiClient.post('/api/image/prune', {}, { timeout: 300000 }),
   uploadIcon: (file, imageName, containerName) => {

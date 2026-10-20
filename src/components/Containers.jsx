@@ -368,8 +368,7 @@ export function Containers() {
                 const response = await containerAPI.updateContainer(
                   containerId,
                   container.name,
-                  container.usingImage,
-                  true
+                  container.usingImage
                 )
 
                 if (response.data.code === 200 || response.data.code === 0) {
@@ -598,12 +597,11 @@ export function Containers() {
         return
       }
 
-      // 注意参数顺序: id, containerName, imageNameAndTag, delOldContainer
+      // 旧容器删除策略由后端环境变量 DelOldContainer 控制，前端不再发送已废弃参数
       const response = await containerAPI.updateContainer(
         containerId,
         container.name,
-        container.usingImage,
-        true
+        container.usingImage
       )
 
       console.log('更新容器响应:', response.data)
@@ -1841,8 +1839,7 @@ function ContainerDetailModal({ container, onClose, onRename, onUpdate, onAction
         const response = await containerAPI.updateContainer(
           container.id,
           container.name,
-          imageNameAndTag,
-          true // 删除旧容器
+          imageNameAndTag
         )
 
         console.log('更新容器响应:', response.data)

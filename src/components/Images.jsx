@@ -257,7 +257,9 @@ export function Images() {
         }
         const { removed = 0, skipped = 0, rounds = 0 } = r.data.data || {}
         const notes = skipped > 0 ? `，${skipped} 个被本地镜像依赖已跳过` : ''
-        const message = `成功清理 ${removed} 个无Tag镜像（共 ${rounds} 轮${notes}）`
+        const message = removed > 0
+          ? `成功清理 ${removed} 个无Tag镜像（共 ${rounds} 轮${notes}）`
+          : `没有可清理的无Tag镜像${skipped > 0 ? `（${skipped} 个被本地镜像依赖）` : ''}`
         setSuccessModal({ isOpen: true, message })
         fetchImages()
         setTimeout(() => setSuccessModal({ isOpen: false, message: '' }), 3000)
@@ -904,7 +906,8 @@ export function Images() {
                   </p>
                   {pruneModal.type === 'dangling' && (
                     <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                      会连带清掉本地构建的中间层（构建缓存），下次本地构建会变慢
+                      会连带清掉本地构建的中间层（构建缓存），下次本地构建会变慢；刚产生的旧镜像也会被删除，
+                      如需保留回滚版本，请先确认已有快照
                     </p>
                   )}
                 </div>
