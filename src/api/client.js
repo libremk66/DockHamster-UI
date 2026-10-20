@@ -152,8 +152,9 @@ export const progressAPI = {
 
 // 资源清理API（未使用卷/网络）
 export const resourcesAPI = {
-  getUnused: () => apiClient.get('/api/resources/unused'),
-  prune: (payload) => apiClient.post('/api/resources/prune', payload),
+  // 统计要遍历卷/网络，30s 内足够；清理逐卷删除，后端上限 120s，前端留余量
+  getUnused: () => apiClient.get('/api/resources/unused', { timeout: 30000 }),
+  prune: (payload) => apiClient.post('/api/resources/prune', payload, { timeout: 180000 }),
 }
 
 // 容器 Web 界面 favicon 解析（概览页快捷导航用）
