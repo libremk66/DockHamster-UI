@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { versionAPI } from '../api/client.js'
 
@@ -52,89 +52,92 @@ function parseVersion(version) {
 /**
  * 版本检查 Hook
  * 用于检查后端版本，并提示用户是否有更新
+ *
+ * 本地版本与远端检查拆成两个独立查询（2026-10-21）：
+ *   之前两者串行放在同一个 queryFn 里，远端要访问 GitHub/CDN（可能超时数秒），
+ *   导致页面进来后本地版本号被拖住、迟迟不显示。现在本地查询毫秒级返回并立即渲染，
+ *   远端检查单独在后台跑，只用于「有新版本」提示。
  */
 export function useVersionCheck() {
-
-  // 查询后端版本信息
-  const { data: versionData, refetch } = useQuery({
-    queryKey: ['version'],
+  // 本地版本：只读后端内存，立即显示
+  const localQuery = useQuery({
+    queryKey: ['version', 'local'],
     queryFn: async () => {
       try {
-        // 获取本地版本信息
         const localResponse = await versionAPI.getVersion('local')
-        
-        let backendVersion = 'unknown'
-        let buildDate = ''
-        
+
         if (localResponse.data.code === 200 || localResponse.data.code === 0) {
           const localData = localResponse.data.data
           if (localData && typeof localData === 'object') {
-            backendVersion = localData.version || 'unknown'
-            buildDate = localData.buildDate || ''
-          } else if (typeof localData === 'string') {
-            backendVersion = localData
-          }
-        }
-        
-        // 获取远端版本信息
-        let remoteVersion = 'unknown'
-        let imageUpdate = false
-        
-        try {
-          const remoteResponse = await versionAPI.getVersion('remote')
-          
-          if (remoteResponse.data.code === 200 || remoteResponse.data.code === 0) {
-            const remoteData = remoteResponse.data.data
-            if (remoteData && typeof remoteData === 'object') {
-              remoteVersion = remoteData.remoteVersion || remoteVersion
-              imageUpdate = !!remoteData.imageUpdate
-            } else if (typeof remoteData === 'string') {
-              remoteVersion = remoteData
+            return {
+              backendVersion: localData.version || 'unknown',
+              buildDate: localData.buildDate || '',
             }
           }
-        } catch (error) {
-          console.warn('获取远端版本信息失败:', error)
+          if (typeof localData === 'string') {
+            return { backendVersion: localData, buildDate: '' }
+          }
         }
-        
-        return {
-          backendVersion,
-          remoteVersion,
-          buildDate,
-          imageUpdate,
-          // 双保险：版本号更新 或 镜像 digest 变化，都算"有新版本"
-          hasBackendUpdate: shouldUpdate(backendVersion, remoteVersion) || imageUpdate,
-          versionUpdate: shouldUpdate(backendVersion, remoteVersion),
-        }
+        return { backendVersion: 'unknown', buildDate: '' }
       } catch (error) {
-        console.error('获取版本信息失败:', error)
-        return {
-          backendVersion: 'unknown',
-          remoteVersion: 'unknown',
-          buildDate: '',
-          imageUpdate: false,
-          hasBackendUpdate: false,
-          versionUpdate: false,
+        console.error('获取本地版本失败:', error)
+        return { backendVersion: 'unknown', buildDate: '' }
+      }
+    },
+    refetchOnWindowFocus: false,
+    staleTime: 60000,
+  })
+
+  // 远端版本：需要访问外网，可能较慢；后台加载，不阻塞版本号显示
+  const remoteQuery = useQuery({
+    queryKey: ['version', 'remote'],
+    queryFn: async () => {
+      try {
+        const remoteResponse = await versionAPI.getVersion('remote')
+
+        if (remoteResponse.data.code === 200 || remoteResponse.data.code === 0) {
+          const remoteData = remoteResponse.data.data
+          if (remoteData && typeof remoteData === 'object') {
+            return {
+              remoteVersion: remoteData.remoteVersion || 'unknown',
+              imageUpdate: !!remoteData.imageUpdate,
+            }
+          }
+          if (typeof remoteData === 'string') {
+            return { remoteVersion: remoteData, imageUpdate: false }
+          }
         }
+        return { remoteVersion: 'unknown', imageUpdate: false }
+      } catch (error) {
+        console.warn('获取远端版本信息失败:', error)
+        return { remoteVersion: 'unknown', imageUpdate: false }
       }
     },
     refetchInterval: 60000, // 每分钟自动刷新
     refetchOnWindowFocus: false,
-    staleTime: 30000 // 30秒内不重新请求
+    staleTime: 30000, // 30秒内不重新请求
+    enabled: !!localQuery.data?.backendVersion,
   })
 
-  // 手动检查更新
+  const backendVersion = localQuery.data?.backendVersion
+  const remoteVersion = remoteQuery.data?.remoteVersion ?? 'unknown'
+  const versionUpdate = shouldUpdate(backendVersion, remoteVersion)
+  // 双保险：版本号更新 或 镜像 digest 变化，都算"有新版本"
+  const imageUpdate = remoteQuery.data?.imageUpdate ?? false
+
+  // 手动检查更新：两个查询都刷新
   const checkForUpdates = useCallback(async () => {
-    await refetch()
-  }, [refetch])
+    await Promise.all([localQuery.refetch(), remoteQuery.refetch()])
+  }, [localQuery.refetch, remoteQuery.refetch])
 
   return {
     // 版本数据
-    backendVersion: versionData?.backendVersion,
-    remoteVersion: versionData?.remoteVersion,
-    buildDate: versionData?.buildDate,
-    hasBackendUpdate: versionData?.hasBackendUpdate,
-    imageUpdate: versionData?.imageUpdate,
-    versionUpdate: versionData?.versionUpdate,
+    backendVersion,
+    remoteVersion,
+    buildDate: localQuery.data?.buildDate,
+    hasBackendUpdate: versionUpdate || imageUpdate,
+    imageUpdate,
+    versionUpdate,
 
     // 方法
     checkForUpdates
