@@ -184,6 +184,7 @@ export const autoUpdateAPI = {
   checkNow: () => apiClient.post('/api/autoUpdate/check', {}, { timeout: 30000 }),
   checkStatus: () => apiClient.get('/api/autoUpdate/check/status'),
   getStatus: () => apiClient.get('/api/autoUpdate/status'),
+  clearStatus: (name) => apiClient.post('/api/autoUpdate/status/clear', { name }),
   // 「任务」页：全部任务（进行中 + 保留期内的已完成/失败）
   tasks: () => apiClient.get('/api/tasks'),
   // 「任务」页历史记录：自动/整组批次运行记录 + 任务级历史（合并按时间倒序）

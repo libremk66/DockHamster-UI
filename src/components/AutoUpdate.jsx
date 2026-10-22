@@ -289,6 +289,21 @@ export function AutoUpdate() {
   const lastStatus = status?.lastStatus || {}
   const activeTasks = status?.activeTasks || []
 
+  // 清除某容器的上次更新标记（用户已确认）
+  const clearLastStatus = async (name) => {
+    try {
+      const r = await autoUpdateAPI.clearStatus(name)
+      if (r.data?.code === 200 || r.data?.code === 0) {
+        setStatus(prev => {
+          if (!prev?.lastStatus) return prev
+          const next = { ...prev.lastStatus }
+          delete next[name]
+          return { ...prev, lastStatus: next }
+        })
+      }
+    } catch (e) { /* 轮询会继续刷新 */ }
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-4">
       {/* 页头 */}
@@ -631,9 +646,19 @@ export function AutoUpdate() {
                     {lastStatus[c.name] && (
                       <span
                         title={`上次：${lastStatus[c.name].time} ${lastStatus[c.name].message || ''}`}
-                        className={lastStatus[c.name].ok ? 'text-emerald-500' : 'text-red-500'}
+                        className={cn('inline-flex items-center', lastStatus[c.name].ok ? 'text-emerald-500' : 'text-red-500')}
                       >
                         {lastStatus[c.name].ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                        {!lastStatus[c.name].ok && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); clearLastStatus(c.name) }}
+                            className="ml-0.5 rounded p-0.5 text-gray-400 hover:bg-red-500/10 hover:text-red-500"
+                            title="清除失败标记（表示已知晓）"
+                          >
+                            ×
+                          </button>
+                        )}
                       </span>
                     )}
                   </label>

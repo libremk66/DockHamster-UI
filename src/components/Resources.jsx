@@ -198,8 +198,8 @@ export function Resources({ onClose, onDone }) {
                 {showVolumes && (
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {anonymousVols.map(v => (
-                      <div key={v.Name} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs">
-                        <span className="font-mono text-gray-600 dark:text-gray-300" title={v.Name}>{shortVolName(v.Name)}</span>
+                      <div key={v.name} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs">
+                        <span className="font-mono text-gray-600 dark:text-gray-300" title={v.name}>{shortVolName(v.name)}</span>
                         <span className="text-gray-400">{volSizeText(v)}</span>
                       </div>
                     ))}
@@ -223,11 +223,11 @@ export function Resources({ onClose, onDone }) {
                 {showProject && (
                   <div className="mt-2 space-y-1.5">
                     {projectVols.map(v => (
-                      <div key={v.Name} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs">
+                      <div key={v.name} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs">
                         <span className="truncate">
-                          <span className="font-mono text-gray-700 dark:text-gray-300">{v.Name}</span>
-                          {v.Project && <span className="ml-2 text-amber-600 dark:text-amber-500">项目 {v.Project}（已停用）</span>}
-                          {!v.Project && <span className="ml-2 text-gray-400">有名卷</span>}
+                          <span className="font-mono text-gray-700 dark:text-gray-300">{v.name}</span>
+                          {v.project && <span className="ml-2 text-amber-600 dark:text-amber-500">项目 {v.project}（已停用）</span>}
+                          {!v.project && <span className="ml-2 text-gray-400">有名卷</span>}
                         </span>
                         <span className="text-gray-400 flex-shrink-0 ml-2">{volSizeText(v)}</span>
                       </div>
@@ -289,13 +289,13 @@ export function Resources({ onClose, onDone }) {
             {showNets && (
               <div className="mt-2 space-y-1.5">
                 {networks.map(n => (
-                  <div key={n.ID} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs">
+                  <div key={n.id} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs">
                     <span className="truncate">
-                      <span className="font-mono text-gray-700 dark:text-gray-300">{n.Name}</span>
-                      <span className="ml-2 text-gray-400">{n.Driver}</span>
-                      {n.Project && <span className="ml-2 text-gray-400">项目 {n.Project}</span>}
+                      <span className="font-mono text-gray-700 dark:text-gray-300">{n.name}</span>
+                      <span className="ml-2 text-gray-400">{n.driver}</span>
+                      {n.project && <span className="ml-2 text-gray-400">项目 {n.project}</span>}
                     </span>
-                    {n.CreatedAt && <span className="text-gray-400 flex-shrink-0 ml-2">{n.CreatedAt}</span>}
+                    {n.createdAt && <span className="text-gray-400 flex-shrink-0 ml-2">{n.createdAt}</span>}
                   </div>
                 ))}
               </div>

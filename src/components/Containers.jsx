@@ -210,6 +210,41 @@ export function Containers() {
     }
   }
 
+  // 清除某容器「上次自动更新失败」标记（用户已确认）
+  const clearAutoStatus = async (container, e) => {
+    if (e) e.stopPropagation()
+    try {
+      const r = await autoUpdateAPI.clearStatus(container.name)
+      if (r.data?.code === 200 || r.data?.code === 0) {
+        setAutoStatus(prev => {
+          if (!prev?.lastStatus) return prev
+          const lastStatus = { ...prev.lastStatus }
+          delete lastStatus[container.name]
+          return { ...prev, lastStatus }
+        })
+      } else {
+        setConfirmModal({
+          isOpen: true,
+          title: '清除失败标记失败',
+          message: r.data?.msg || '未知错误',
+          onConfirm: () => setConfirmModal({ isOpen: false }),
+          onCancel: null,
+          type: 'danger'
+        })
+      }
+    } catch (err) {
+      console.error('清除自动更新标记失败:', err)
+      setConfirmModal({
+        isOpen: true,
+        title: '清除失败标记失败',
+        message: err.response?.data?.msg || err.message || '未知错误',
+        onConfirm: () => setConfirmModal({ isOpen: false }),
+        onCancel: null,
+        type: 'danger'
+      })
+    }
+  }
+
   const isAutoEnabled = (name) => {
     if (!autoSettings) return false
     const list = autoSettings.containers || []
@@ -1497,10 +1532,20 @@ export function Containers() {
                           </button>
                           {autoOn && autoInfo && (
                             <span
-                              className={cn("text-xs whitespace-nowrap", autoInfo.ok ? "text-emerald-500" : "text-red-500")}
+                              className={cn("inline-flex items-center text-xs whitespace-nowrap", autoInfo.ok ? "text-emerald-500" : "text-red-500")}
                               title={`上次自动更新：${autoInfo.time} ${autoInfo.message || ''}`}
                             >
                               {autoInfo.ok ? '✓' : '✕'} {autoInfo.time ? autoInfo.time.slice(5, 16) : ''}
+                              {!autoInfo.ok && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => clearAutoStatus(container, e)}
+                                  className="ml-1 rounded p-0.5 text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                                  title="清除失败标记（表示已知晓）"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
                             </span>
                           )}
                           {!autoOn && <span className="text-xs text-gray-400 dark:text-gray-500">未开启</span>}
