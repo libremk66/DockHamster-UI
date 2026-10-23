@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { composeBackupAPI, containerAPI, projectAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
+import { uncheckableTooltip } from '../utils/uncheckable.js'
 
 // 「Compose」页：compose 项目 / 服务分组视图
 // —— 按 label 聚合（零配置可见）→ 每个项目标注文件可达性 → 不可达的给挂载引导；
@@ -270,7 +271,7 @@ function ProjectRow({ project: p, onViewFile, onViewLogs, onExport }) {
                 </span>
                 {svc.haveUpdate && <span className="badge-warning flex-shrink-0">有更新</span>}
                 {!svc.haveUpdate && svc.uncheckable && (
-                  <span className="badge-info flex-shrink-0" title="镜像没有可查询的标签（本地构建/悬空），无法检测更新">
+                  <span className="badge-info flex-shrink-0" title={uncheckableTooltip(svc.uncheckableReason, '镜像没有可查询的标签（本地构建/悬空），无法检测更新')}>
                     无法检测
                   </span>
                 )}

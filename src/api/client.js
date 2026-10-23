@@ -176,6 +176,12 @@ export const acceleratorAPI = {
   pull: (source, image) => apiClient.post('/api/accelerator/pull', { source, image }),
 }
 
+// 私有镜像仓库凭据（ghcr.io 等私有包的检测更新与拉取）
+export const registryAuthAPI = {
+  getSettings: () => apiClient.get('/api/registryAuth/settings'),
+  saveSettings: (settings) => apiClient.post('/api/registryAuth/settings', settings),
+}
+
 // 自动更新相关API
 export const autoUpdateAPI = {
   getSettings: () => apiClient.get('/api/autoUpdate/settings'),

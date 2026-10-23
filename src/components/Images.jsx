@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search, History, ShieldCheck, Zap } from 'lucide-react'
+import { HardDrive, Trash2, RefreshCw, Link, BrushCleaning, X, AlertCircle, CheckCircle, Search, History, ShieldCheck, Zap, KeyRound } from 'lucide-react'
 import { imageAPI, autoUpdateAPI, containerAPI, resourcesAPI } from '../api/client.js'
 import { cn } from '../utils/cn.js'
 import { CheckUpdateButton } from './CheckUpdateButton.jsx'
 import { Resources } from './Resources.jsx'
 import { AcceleratorPanel, AcceleratorPullModal } from './Accelerator.jsx'
+import { RegistryAuthPanel } from './RegistryAuth.jsx'
+import { imageHubLink } from '../utils/registry.js'
 import { getImageLogo } from '../config/imageLogos.js'
 
 // 是否是 Docker Hub 镜像（无 registry 前缀；加速拉取仅支持这类）
@@ -55,6 +57,7 @@ export function Images() {
   const [rollbackTarget, setRollbackTarget] = useState(null)
   // 加速源面板 / 加速拉取
   const [accelPanelOpen, setAccelPanelOpen] = useState(false)
+  const [registryPanelOpen, setRegistryPanelOpen] = useState(false)
   const [pullModal, setPullModal] = useState({ isOpen: false, image: null })
   const [checkingUpdates, setCheckingUpdates] = useState(false) // {containerName, ref, candidates}
 
@@ -373,6 +376,14 @@ export function Images() {
             >
               <Zap className="h-4 w-4" />
               <span>加速源</span>
+            </button>
+            <button
+              onClick={() => setRegistryPanelOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-800 transition-colors text-sm font-medium"
+              title="配置私有镜像仓库凭据（ghcr.io 等私有包的检测更新与拉取）"
+            >
+              <KeyRound className="h-4 w-4" />
+              <span>私有仓库</span>
             </button>
             <button
               onClick={() => {
@@ -774,6 +785,7 @@ export function Images() {
               )}
               {visibleImages.map((image) => {
                 const dangling = isDanglingImage(image)
+                const hubLink = dangling ? null : imageHubLink(image.name)
                 return (
                   <div
                     key={image.id}
@@ -847,15 +859,17 @@ export function Images() {
                           <Zap className="h-3.5 w-3.5" />加速拉取
                         </button>
                       )}
-                      <a
-                        href={`https://hub.docker.com/r/${image.name}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-primary-200 dark:hover:border-primary-800 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"
-                        title="在Docker Hub查看"
-                      >
-                        <Link className="h-3.5 w-3.5" />Hub
-                      </a>
+                      {hubLink && (
+                        <a
+                          href={hubLink.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all active:scale-95 whitespace-nowrap text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-primary-200 dark:hover:border-primary-800 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                          title={hubLink.title}
+                        >
+                          <Link className="h-3.5 w-3.5" />{hubLink.label}
+                        </a>
+                      )}
                       <button
                         onClick={() => setDeleteModal({ isOpen: true, image, force: false })}
                         disabled={image.hasChildren}
@@ -1169,6 +1183,7 @@ export function Images() {
 
       {/* 加速源管理面板 */}
       <AcceleratorPanel isOpen={accelPanelOpen} onClose={() => setAccelPanelOpen(false)} />
+      <RegistryAuthPanel isOpen={registryPanelOpen} onClose={() => setRegistryPanelOpen(false)} />
 
       {/* 加速拉取弹窗 */}
       <AcceleratorPullModal

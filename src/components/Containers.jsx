@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import { containerAPI, progressAPI, imageAPI, autoUpdateAPI } from '../api/client.js'
 import { ProgressBar } from './ProgressBar.jsx'
+import { isBareImageId, resolveContainerImageRef } from '../utils/imageRef.js'
+import { uncheckableTooltip } from '../utils/uncheckable.js'
 import { CheckUpdateButton } from './CheckUpdateButton.jsx'
 import { cn } from '../utils/cn.js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -400,10 +402,11 @@ export function Containers() {
               break
             case 'update':
               if (container) {
+                // 用解析后的引用：daemon 可能已把 usingImage 退化成镜像 ID（旧后端也会走到这里）
                 const response = await containerAPI.updateContainer(
                   containerId,
                   container.name,
-                  container.usingImage
+                  resolveContainerImageRef(container)
                 )
 
                 if (response.data.code === 200 || response.data.code === 0) {
@@ -614,7 +617,7 @@ export function Containers() {
         return
       }
 
-      console.log(`开始更新容器 "${container.name}"，使用镜像: ${container.usingImage}`)
+      console.log(`开始更新容器 "${container.name}"，使用镜像: ${resolveContainerImageRef(container)}`)
 
       setContainerActions(prev => ({
         ...prev,
@@ -636,7 +639,7 @@ export function Containers() {
       const response = await containerAPI.updateContainer(
         containerId,
         container.name,
-        container.usingImage
+        resolveContainerImageRef(container)
       )
 
       console.log('更新容器响应:', response.data)
@@ -1556,7 +1559,7 @@ export function Containers() {
                             ? <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium whitespace-nowrap">有新版本</span>
                             : container.uncheckable
                               ? <span
-                                  title="镜像没有有效标签（悬空/本地构建），无法检测更新。建议在「更新」里把镜像名改成「名称:标签」（如 nginx:latest）后更新一次，可恢复正常。"
+                                  title={uncheckableTooltip(container.uncheckableReason, "镜像没有有效标签（悬空/本地构建），无法检测更新。建议在「更新」里把镜像名改成「名称:标签」（如 nginx:latest）后更新一次，可恢复正常。")}
                                   className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400 whitespace-nowrap cursor-help"
                                 >无法检测</span>
                               : <span className="text-xs text-gray-300 dark:text-gray-600 whitespace-nowrap">已是最新</span>}
@@ -1670,9 +1673,10 @@ export function Containers() {
 function ContainerDetailModal({ container, onClose, onRename, onUpdate, onAction }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState(container.name)
-  const [imageNameAndTag, setImageNameAndTag] = useState(container.usingImage)
+  // 初始值优先用容器创建时的引用（daemon 可能已把 usingImage 退化成镜像 ID）
+  const [imageNameAndTag, setImageNameAndTag] = useState(() => resolveContainerImageRef(container))
   // 裸镜像 ID（sha256:… / 短 ID）不是可拉取的名称：给红字提示（后端也会拒绝）
-  const imageRefIsBareId = /^(sha256:)?[0-9a-f]{12,64}$/i.test((imageNameAndTag || '').trim())
+  const imageRefIsBareId = isBareImageId(imageNameAndTag)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [isActionProcessing, setIsActionProcessing] = useState(false)
@@ -1697,7 +1701,7 @@ function ContainerDetailModal({ container, onClose, onRename, onUpdate, onAction
   // 当容器切换时，更新表单字段的值
   React.useEffect(() => {
     setName(container.name)
-    setImageNameAndTag(container.usingImage)
+    setImageNameAndTag(resolveContainerImageRef(container))
     setCurrentContainer(container)
   }, [container])
 

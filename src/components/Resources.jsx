@@ -41,7 +41,9 @@ export function Resources({ onClose, onDone }) {
   const [showVolumes, setShowVolumes] = useState(false)
   const [showProject, setShowProject] = useState(false)
   const [showNets, setShowNets] = useState(false)
-  const [pruneModal, setPruneModal] = useState({ isOpen: false, kind: null, title: '', desc: '', payload: null, loading: false })
+  // 停用项目卷：逐卷勾选（默认全不勾，避免误删旧项目数据）
+  const [selectedProject, setSelectedProject] = useState([])
+  const [pruneModal, setPruneModal] = useState({ isOpen: false, kind: null, title: '', desc: '', names: [], payload: null, loading: false })
 
   const fetchStat = async () => {
     try {
@@ -49,7 +51,11 @@ export function Resources({ onClose, onDone }) {
       setError(null)
       const r = await resourcesAPI.getUnused()
       if (r.data?.code === 200) {
-        setStat(r.data.data || null)
+        const d = r.data.data || null
+        setStat(d)
+        // 勾选项可能已被别处删除/恢复使用：只保留仍在列表里的
+        const alive = new Set((d?.projectVolumes || []).map(v => v.name))
+        setSelectedProject(prev => prev.filter(n => alive.has(n)))
       } else {
         setError(r.data?.msg || '获取资源统计失败')
       }
@@ -68,7 +74,7 @@ export function Resources({ onClose, onDone }) {
     try {
       setPruneModal(m => ({ ...m, loading: true }))
       const r = await resourcesAPI.prune(p)
-      setPruneModal({ isOpen: false, kind: null, title: '', desc: '', payload: null, loading: false })
+      setPruneModal({ isOpen: false, kind: null, title: '', desc: '', names: [], payload: null, loading: false })
       if (r.data?.code === 200) {
         const d = r.data.data || {}
         const failedNames = Object.keys(d.failed || {})
@@ -78,6 +84,7 @@ export function Resources({ onClose, onDone }) {
           message += `；${failedNames.length} 项未清理：${preview}${failedNames.length > 5 ? ' 等' : ''}`
         }
         setSuccessModal({ isOpen: true, message })
+        setSelectedProject([])
         fetchStat()
         onDone && onDone()
         setTimeout(() => setSuccessModal({ isOpen: false, message: '' }), 5000)
@@ -170,11 +177,28 @@ export function Resources({ onClose, onDone }) {
                 isOpen: true, kind: 'volumes', loading: false,
                 title: '清理匿名卷',
                 desc: `将删除 ${anonymousVols.length} 个容器重建遗留的匿名卷（创建超过 24 小时、无容器引用的）。`,
+                names: [],
                 payload: { volumes: true, projectVolumes: false, networks: false },
               })}
               className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
             >
               清理匿名卷
+            </button>
+          )}
+          {projectVols.length > 0 && (
+            <button
+              onClick={() => setPruneModal({
+                isOpen: true, kind: 'projectVolumes', loading: false,
+                title: '清理选中的停用项目卷',
+                desc: `将删除 ${selectedProject.length} 个已停用项目的卷。这些卷可能装着旧项目的数据，删除后不可恢复。`,
+                names: [...selectedProject],
+                payload: { volumes: false, projectVolumes: false, networks: false, projectVolumeNames: [...selectedProject] },
+              })}
+              disabled={selectedProject.length === 0}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title={selectedProject.length === 0 ? '先勾选要删除的卷' : '只删除勾选的卷'}
+            >
+              清理选中（{selectedProject.length}）
             </button>
           )}
         </div>
@@ -223,14 +247,22 @@ export function Resources({ onClose, onDone }) {
                 {showProject && (
                   <div className="mt-2 space-y-1.5">
                     {projectVols.map(v => (
-                      <div key={v.name} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs">
-                        <span className="truncate">
+                      <label key={v.name} className="flex items-center justify-between px-3 py-1.5 bg-gray-50/60 dark:bg-gray-700/20 rounded-lg text-xs cursor-pointer hover:bg-amber-50/60 dark:hover:bg-amber-900/10">
+                        <span className="truncate flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="accent-amber-600 flex-shrink-0"
+                            checked={selectedProject.includes(v.name)}
+                            onChange={() => setSelectedProject(prev =>
+                              prev.includes(v.name) ? prev.filter(n => n !== v.name) : [...prev, v.name]
+                            )}
+                          />
                           <span className="font-mono text-gray-700 dark:text-gray-300">{v.name}</span>
-                          {v.project && <span className="ml-2 text-amber-600 dark:text-amber-500">项目 {v.project}（已停用）</span>}
-                          {!v.project && <span className="ml-2 text-gray-400">有名卷</span>}
+                          {v.project && <span className="ml-1 text-amber-600 dark:text-amber-500">项目 {v.project}（已停用）</span>}
+                          {!v.project && <span className="ml-1 text-gray-400">有名卷</span>}
                         </span>
                         <span className="text-gray-400 flex-shrink-0 ml-2">{volSizeText(v)}</span>
-                      </div>
+                      </label>
                     ))}
                   </div>
                 )}
@@ -263,6 +295,7 @@ export function Resources({ onClose, onDone }) {
                 isOpen: true, kind: 'networks', loading: false,
                 title: '清理未使用网络',
                 desc: `将删除 ${networks.length} 个无容器使用的网络。正在被使用的网络 daemon 会拒绝删除。`,
+                names: [],
                 payload: { volumes: false, projectVolumes: false, networks: true },
               })}
               className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors"
@@ -321,6 +354,18 @@ export function Resources({ onClose, onDone }) {
               </div>
             </div>
             <div className="px-6 py-4 bg-gray-50/50 dark:bg-gray-700/20">
+              {pruneModal.names?.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                    将删除以下 {pruneModal.names.length} 个卷：
+                  </div>
+                  <ul className="max-h-40 overflow-y-auto rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/60">
+                    {pruneModal.names.map(n => (
+                      <li key={n} className="px-2.5 py-1.5 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-1.5 list-disc pl-4">
                 <li>删除操作不可恢复；无容器引用的才会被删除（daemon 会拒绝在用的）</li>
                 <li>卷创建不足 24 小时的会被跳过（避免误删刚创建的）</li>
@@ -329,7 +374,7 @@ export function Resources({ onClose, onDone }) {
             </div>
             <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
               <button
-                onClick={() => setPruneModal({ isOpen: false, kind: null, title: '', desc: '', payload: null, loading: false })}
+                onClick={() => setPruneModal({ isOpen: false, kind: null, title: '', desc: '', names: [], payload: null, loading: false })}
                 className="flex-1 px-4 py-2.5 text-sm font-semibold bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600 transition-colors"
               >
                 取消
